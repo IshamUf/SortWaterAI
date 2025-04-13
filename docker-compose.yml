@@ -32,8 +32,6 @@ services:
     depends_on:
       - postgres
       - redis
-    ports:
-      - "5050:5050"
 
   bot:
     build:
