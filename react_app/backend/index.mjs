@@ -1,50 +1,69 @@
-// backend/index.mjs
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import sequelize from './config/database.mjs';
-import './models/User.mjs';
-import './models/Level.mjs';
-import './models/Progress.mjs';
-import redisClient from './utils/redisClient.mjs';
+import express from 'express'
+import cors from 'cors'
+import { fileURLToPath } from 'url'
+import path from 'path'
+import db from './config/database.mjs'
+import redisClient from './utils/redisClient.mjs'
 
-import leaderboardRoutes from './routes/leaderboard.mjs';
+import leaderboardRoutes from './routes/leaderboard.mjs'
+import levelRoutes from './routes/levels.mjs'
+import progressRoutes from './routes/progress.mjs'
+import userRoutes from './routes/users.mjs'
 
-import levelRoutes from './routes/levels.mjs';
-import progressRoutes from './routes/progress.mjs';
-import userRoutes from './routes/users.mjs';
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-dotenv.config();
+const app = express()
+const PORT = process.env.PORT || 5050
 
-const app = express();
-const PORT = process.env.PORT || 5050;
+app.use(cors())
+app.use(express.json())
 
-app.use(cors());
-app.use(express.json());
+// Статические файлы фронтенда
+app.use(express.static(path.join(__dirname, 'public')))
+app.get(/^\/(?!api\/).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+})
 
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/levels', levelRoutes);
-app.use('/api/progress', progressRoutes);
-app.use('/api/users', userRoutes);
+// API маршруты
+app.use('/api/leaderboard', leaderboardRoutes)
+app.use('/api/levels', levelRoutes)
+app.use('/api/progress', progressRoutes)
+app.use('/api/users', userRoutes)
 
-app.get('/', (req, res) => {
-  res.send('SortWater backend is running.');
-});
+// Ожидание готовности базы данных
+const waitForDatabase = async (retries = 10) => {
+  while (retries > 0) {
+    try {
+      await db.authenticate()
+      console.log('Database ready')
+      return
+    } catch (e) {
+      console.log('Waiting for database...')
+      await new Promise(res => setTimeout(res, 2000))
+      retries--
+    }
+  }
+  throw new Error('Database not ready')
+}
 
-async function startServer() {
+// Запуск сервера после подключения к БД и Redis
+const startServer = async () => {
   try {
-    await redisClient.connect();
-    console.log('Redis connected');
+    await redisClient.connect()
+    console.log('Redis connected')
 
-    await sequelize.sync();
-    console.log('Database synced');
+    await waitForDatabase()
+    await db.sync()
+    console.log('Database synced')
 
     app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error('Failed to start server:', err);
+      console.log(`Server running on port ${PORT}`)
+    })
+  } catch (error) {
+    console.error('Failed to start server:', error)
   }
 }
 
-startServer();
+startServer()
+
