@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/api";
 
-// Загружаем прогресс для указанного userId
 async function fetchLevelDataForUser(userId) {
   try {
     const resp = await api.get(`/progress?userId=${userId}`);
@@ -24,7 +23,6 @@ async function fetchLevelDataForUser(userId) {
   }
 }
 
-// Если прогресса нет — грузим уровень по умолчанию
 async function fallbackToLevel(levelId) {
   try {
     const resp = await api.get(`/levels/${levelId}`);
@@ -173,13 +171,10 @@ function isSolved(state) {
 export default function GamePage() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Получаем userId из location.state; если его нет, используем fallback = 1
   const [userId] = useState(location.state?.userId || 1);
   const [levelData, setLevelData] = useState(null);
   const [coins, setCoins] = useState(0);
   const [selectedTube, setSelectedTube] = useState(null);
-  // Флаг показа модального окна "Level Solved"
   const [showSolvedModal, setShowSolvedModal] = useState(false);
 
   useEffect(() => {
@@ -196,28 +191,17 @@ export default function GamePage() {
     init();
   }, [userId]);
 
-  if (!levelData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
-        Loading level...
-      </div>
-    );
-  }
+  if (!levelData) return <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">Loading level...</div>;
 
   const solved = isSolved(levelData.state);
 
-  // Обработка клика по пробирке
   const handleTubeClick = async (tubeIndex) => {
     if (solved) return;
     const state = levelData.state;
     if (selectedTube === null) {
-      // Первый клик: выбираем пробирку, если нижний слой не пустой
       const bottom = state[tubeIndex][state[tubeIndex].length - 1];
-      if (bottom !== -1) {
-        setSelectedTube(tubeIndex);
-      }
+      if (bottom !== -1) setSelectedTube(tubeIndex);
     } else {
-      // Второй клик: если та же пробирка, сбрасываем выделение
       if (selectedTube === tubeIndex) {
         setSelectedTube(null);
         return;
@@ -236,8 +220,8 @@ export default function GamePage() {
       setLevelData({ ...levelData, state: newState });
       await saveProgress(userId, levelData.Level_id, newState, completed);
       if (completed) {
-        // При решении уровня, показываем модальное окно "Level Solved"
         setShowSolvedModal(true);
+        await setNextLevelAsInProgress(userId, levelData.Level_id + 1);
       }
       setSelectedTube(null);
     }
@@ -265,9 +249,6 @@ export default function GamePage() {
   };
 
   const handleContinue = async () => {
-    // Переходим к следующему уровню: создаем запись для следующего уровня и перезагружаем страницу
-    const nextId = levelData.Level_id + 1;
-    await setNextLevelAsInProgress(userId, nextId);
     window.location.reload();
   };
 
@@ -277,7 +258,6 @@ export default function GamePage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6">
       <div className="w-[390px] h-[844px] bg-gray-900 rounded-3xl shadow-xl flex flex-col text-white relative overflow-hidden">
-        {/* Верхняя панель */}
         <div className="flex justify-between items-center px-6 pt-6">
           <button
             className="bg-gray-700 px-3 py-1.5 rounded-full text-sm hover:bg-gray-600 transition"
@@ -290,7 +270,6 @@ export default function GamePage() {
             <span className="text-yellow-400">🪙</span>
           </div>
         </div>
-        {/* Основная область */}
         <div className="flex flex-col flex-grow px-4 py-4 items-center">
           <div className="text-center text-sm text-gray-400 mb-2">
             Level {levelData.Level_id}
@@ -301,13 +280,7 @@ export default function GamePage() {
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
               {topRow.map((tube, i) => (
-                <Tube
-                  key={i}
-                  tube={tube}
-                  index={i}
-                  onClick={handleTubeClick}
-                  selected={selectedTube === i}
-                />
+                <Tube key={i} tube={tube} index={i} onClick={handleTubeClick} selected={selectedTube === i} />
               ))}
             </div>
             {bottomRow.length > 0 && (
@@ -328,42 +301,26 @@ export default function GamePage() {
             )}
           </div>
           <div className="w-full mt-4">
-            <button
-              onClick={handleResetLevel}
-              className="bg-red-600 hover:bg-red-500 px-3 py-2 rounded-full w-full text-center font-semibold transition"
-            >
+            <button onClick={handleResetLevel} className="bg-red-600 hover:bg-red-500 px-3 py-2 rounded-full w-full text-center font-semibold transition">
               Reset Level
             </button>
           </div>
         </div>
-        {/* Модальное окно "Level Solved" */}
         {solved && showSolvedModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
               <h3 className="text-lg font-bold mb-4">Уровень пройден!</h3>
               <div className="flex flex-col space-y-3">
-                <button
-                  className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
-                  onClick={handleContinue}
-                >
+                <button className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700" onClick={handleContinue}>
                   Continue
                 </button>
-                <button
-                  className="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition"
-                  onClick={() => navigate("/")}
-                >
-                  Main
-                </button>
+                <button className="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition" onClick={() => navigate("/")}>Main</button>
               </div>
             </div>
           </div>
         )}
-        {/* Кнопка копирования текста "@SortWaterAI" */}
         <div className="absolute bottom-3 w-full text-center">
-          <button
-            onClick={handleCopyText}
-            className="text-xs text-gray-500 underline focus:outline-none"
-          >
+          <button onClick={handleCopyText} className="text-xs text-gray-500 underline focus:outline-none">
             @SortWaterAI
           </button>
         </div>
