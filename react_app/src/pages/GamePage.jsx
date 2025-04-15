@@ -256,9 +256,9 @@ export default function GamePage() {
   const bottomRow = levelData.state.length > 4 ? levelData.state.slice(4) : [];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6">
-      <div className="w-[390px] h-[844px] bg-gray-900 rounded-3xl shadow-xl flex flex-col text-white relative overflow-hidden">
-        <div className="flex justify-between items-center px-6 pt-6">
+    <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
+      <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
+        <div className="flex justify-between items-center mb-4">
           <button
             className="bg-gray-700 px-3 py-1.5 rounded-full text-sm hover:bg-gray-600 transition"
             onClick={() => navigate("/")}
@@ -270,14 +270,12 @@ export default function GamePage() {
             <span className="text-yellow-400">🪙</span>
           </div>
         </div>
-        <div className="flex flex-col flex-grow px-4 py-4 items-center">
-          <div className="text-center text-sm text-gray-400 mb-2">
-            Level {levelData.Level_id}
-          </div>
-          <h2 className="text-xl font-bold mb-4">
-            {solved ? "Level Solved!" : "Keep playing..."}
-          </h2>
-          <div className="flex-1 flex flex-col justify-center space-y-4">
+
+        <div className="flex flex-col items-center justify-center flex-grow gap-6">
+          <div className="text-center text-sm text-gray-400">Level {levelData.Level_id}</div>
+          <h2 className="text-xl font-bold">{solved ? "Level Solved!" : "Keep playing..."}</h2>
+
+          <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
               {topRow.map((tube, i) => (
                 <Tube key={i} tube={tube} index={i} onClick={handleTubeClick} selected={selectedTube === i} />
@@ -300,40 +298,26 @@ export default function GamePage() {
               </div>
             )}
           </div>
-          <div className="w-full mt-4">
-            <button onClick={handleResetLevel} className="bg-red-600 hover:bg-red-500 px-3 py-2 rounded-full w-full text-center font-semibold transition">
-              Reset Level
-            </button>
-          </div>
-        </div>
-        {solved && showSolvedModal && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
-              <h3 className="text-lg font-bold mb-4">Уровень пройден!</h3>
-              <div className="flex flex-col space-y-3">
-                <button className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700" onClick={handleContinue}>
-                  Continue
-                </button>
-                <button className="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition" onClick={() => navigate("/")}>Main</button>
-              </div>
-            </div>
-          </div>
-        )}
-        <div className="absolute bottom-3 w-full text-center">
-          <button onClick={handleCopyText} className="text-xs text-gray-500 underline focus:outline-none">
-            @SortWaterAI
+
+          <button onClick={handleResetLevel} className="bg-red-600 hover:bg-red-500 px-3 py-2 rounded-full w-full text-center font-semibold transition max-w-xs">
+            Reset Level
           </button>
         </div>
       </div>
+
+      {showSolvedModal && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
+            <h3 className="text-lg font-bold mb-4">Уровень пройден!</h3>
+            <div className="flex flex-col space-y-3">
+              <button className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700" onClick={handleContinue}>
+                Continue
+              </button>
+              <button className="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition" onClick={() => navigate("/")}>Main</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
-
-async function handleCopyText() {
-  try {
-    await navigator.clipboard.writeText("@SortWaterAI");
-    alert("Текст '@SortWaterAI' скопирован в буфер обмена!");
-  } catch (err) {
-    console.error("Ошибка копирования текста:", err);
-  }
 }
