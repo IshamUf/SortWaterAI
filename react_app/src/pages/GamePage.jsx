@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/api";
 
-/* ---------- Локальная логика игры ---------- */
-const findTop = (t) => t.findIndex((c) => c !== -1);
+/* ---------- Локальная игровая логика ---------- */
+const findTop = (tube) => tube.findIndex((c) => c !== -1);
 function canPour(src, dst) {
   const from = findTop(src);
   if (from === -1) return false;
@@ -12,12 +12,16 @@ function canPour(src, dst) {
   return to === -1 || src[from] === dst[to];
 }
 function pour(src, dst) {
-  const A = [...src], B = [...dst];
+  const A = [...src],
+    B = [...dst];
   let from = findTop(A);
   const color = A[from];
+
+  // сколько одинаковых сверху
   let cnt = 1;
   for (let i = from + 1; i < A.length && A[i] === color; i++) cnt++;
 
+  // куда льём
   let to = findTop(B);
   to = to === -1 ? B.length - 1 : to - 1;
 
@@ -32,19 +36,19 @@ function pour(src, dst) {
       moved = true;
     } else break;
   }
-  return { A, B, moved };
+  return { newSource: A, newTarget: B, moved };
 }
 const clone = (s) => s.map((t) => [...t]);
-/* ------------------------------------------ */
+/* ------------------------------------------------ */
 
-/* ---------- карта цвета (как было раньше) ---------- */
-function getColorBlock(color, layerIndex, tube) {
+function getColorBlock(color, idx, tube) {
   const base =
     "w-full h-full mx-auto rounded-none transition-all duration-500 ease-in-out";
-  const isBottomFilled =
-    layerIndex === tube.length - 1 || tube[layerIndex + 1] === -1;
-  const rounded = isBottomFilled ? "rounded-b-full" : "";
-  const colorMap = {
+  const isBottom =
+    idx === tube.length - 1 || tube[idx + 1] === -1
+      ? "rounded-b-full"
+      : "";
+  const map = {
     0: "bg-[#8CB4C9]",
     1: "bg-[#C9ADA7]",
     2: "bg-[#B5CDA3]",
@@ -54,24 +58,23 @@ function getColorBlock(color, layerIndex, tube) {
     6: "bg-[#A1C6EA]",
     7: "bg-[#BFCBA8]",
   };
-  return `${base} ${colorMap[color] || "bg-transparent"} ${rounded} opacity-90`;
+  return `${base} ${map[color] || "bg-transparent"} ${isBottom} opacity-90`;
 }
-/* --------------------------------------------------- */
 
 export default function GamePage() {
   const navigate = useNavigate();
   const { state: navState } = useLocation();
   const [userId] = useState(navState?.userId || 1);
 
+  /* ---- состояние ---- */
   const [coins, setCoins] = useState(0);
   const [levelId, setLevelId] = useState(null);
   const [state, setState] = useState(null);
   const [status, setStatus] = useState("in_progress");
-
-  const [sel, setSel] = useState(null);
+  const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  /* ---------- инициализация ---------- */
+  /* ---- инициализация ---- */
   useEffect(() => {
     (async () => {
       try {
@@ -81,6 +84,7 @@ export default function GamePage() {
         console.error(e);
       }
 
+      // текущий in‑progress или старт уровня 1
       let p;
       try {
         p = (await api.get(`/progress?userId=${userId}`)).data;
@@ -88,18 +92,13 @@ export default function GamePage() {
         if (e.response?.status !== 404) console.error(e);
       }
       if (!p) {
-        const lvl = 1;
-        const { data } = await api.get(`/levels/${lvl}`);
+        const { data } = await api.get("/levels/1");
         await api.post("/progress/start", {
           userId,
-          levelId: lvl,
+          levelId: 1,
           state: data.level_data.state,
         });
-        p = {
-          levelId: lvl,
-          state: data.level_data.state,
-          status: "in_progress",
-        };
+        p = { levelId: 1, state: data.level_data.state, status: "in_progress" };
       }
       setLevelId(p.levelId);
       setState(p.state);
@@ -115,33 +114,35 @@ export default function GamePage() {
       </div>
     );
 
-  /* ---------- клик по колбе ---------- */
-  const clickTube = async (idx) => {
+  /* ---- клик по колбе ---- */
+  const onTubeClick = async (idx) => {
     if (status === "completed") return;
 
-    if (sel === null) {
-      if (state[idx][state[idx].length - 1] !== -1) setSel(idx);
+    if (selected === null) {
+      if (state[idx][state[idx].length - 1] !== -1) setSelected(idx);
       return;
     }
-    if (sel === idx) {
-      setSel(null);
+    if (selected === idx) {
+      setSelected(null);
       return;
     }
-    if (!canPour(state[sel], state[idx])) {
-      setSel(null);
+    if (!canPour(state[selected], state[idx])) {
+      setSelected(null);
       return;
     }
 
-    const fromIdx = sel;
+    const fromIdx = selected;
     const toIdx = idx;
-    setSel(null);
+    setSelected(null);
 
-    const { A, B } = pour(state[fromIdx], state[toIdx]);
+    /* оптимистичный UI */
+    const { newSource, newTarget } = pour(state[fromIdx], state[toIdx]);
     const optimistic = clone(state);
-    optimistic[fromIdx] = A;
-    optimistic[toIdx] = B;
+    optimistic[fromIdx] = newSource;
+    optimistic[toIdx] = newTarget;
     setState(optimistic);
 
+    /* подтверждаем ход серверу */
     try {
       const resp = await api.post("/progress/move", {
         userId,
@@ -153,13 +154,13 @@ export default function GamePage() {
       setStatus(resp.data.status);
       if (resp.data.status === "completed") setShowModal(true);
     } catch (err) {
-      console.error("move error:", err?.response?.data || err);
-      setState(state);
+      console.error("server move error:", err?.response?.data || err);
+      setState(state); // откат
     }
   };
 
-  /* ---------- сброс ---------- */
-  const reset = async () => {
+  /* ---- сброс ---- */
+  const resetLevel = async () => {
     const { data } = await api.get(`/levels/${levelId}`);
     await api.post("/progress/start", {
       userId,
@@ -168,34 +169,39 @@ export default function GamePage() {
     });
     setState(data.level_data.state);
     setStatus("in_progress");
-    setSel(null);
+    setSelected(null);
   };
 
-  /* ---------- UI ---------- */
-  const Tube = ({ tube, i }) => (
+  /* ---- Tube компонент ---- */
+  const Tube = ({ tube, idx }) => (
     <div
-      onClick={() => clickTube(i)}
+      onClick={() => onTubeClick(idx)}
       className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch cursor-pointer ${
-        sel === i ? "border-blue-400" : "border-[#3B3F45]"
+        selected === idx ? "border-blue-400" : "border-[#3B3F45]"
       } bg-transparent overflow-hidden`}
     >
       <div className="flex flex-col justify-end pt-2 h-full">
-        {tube.map((c, j) => (
+        {tube.map((c, i) => (
           <div
-            key={j}
-            className={c === -1 ? "flex-1 mx-[2px] opacity-0" : getColorBlock(c, j, tube)}
+            key={i}
+            className={
+              c === -1
+                ? "flex-1 h-full mx-[2px] opacity-0"
+                : getColorBlock(c, i, tube)
+            }
           />
         ))}
       </div>
     </div>
   );
 
-  const top = state.slice(0, 4),
-    bottom = state.slice(4);
+  const topRow = state.slice(0, 4);
+  const bottomRow = state.slice(4);
 
   return (
     <div className="h-[100dvh] flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6">
       <div className="max-w-lg w-full mx-auto flex flex-col h-full">
+        {/* header */}
         <div className="flex justify-between mb-4">
           <button
             onClick={() => navigate("/")}
@@ -209,6 +215,7 @@ export default function GamePage() {
           </div>
         </div>
 
+        {/* поле */}
         <div className="flex flex-col items-center gap-6 flex-grow">
           <div className="text-sm text-gray-400">Level {levelId}</div>
           <h2 className="text-xl font-bold">
@@ -217,21 +224,21 @@ export default function GamePage() {
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              {top.map((t, i) => (
-                <Tube key={i} tube={t} i={i} />
+              {topRow.map((t, i) => (
+                <Tube key={i} tube={t} idx={i} />
               ))}
             </div>
-            {bottom.length > 0 && (
+            {bottomRow.length > 0 && (
               <div className="flex justify-center gap-4">
-                {bottom.map((t, i) => (
-                  <Tube key={i + 4} tube={t} i={i + 4} />
+                {bottomRow.map((t, i) => (
+                  <Tube key={i + 4} tube={t} idx={i + 4} />
                 ))}
               </div>
             )}
           </div>
 
           <button
-            onClick={reset}
+            onClick={resetLevel}
             className="bg-red-600 px-3 py-2 rounded-full max-w-xs w-full"
           >
             Reset Level
@@ -239,6 +246,7 @@ export default function GamePage() {
         </div>
       </div>
 
+      {/* modal */}
       {showModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
           <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">

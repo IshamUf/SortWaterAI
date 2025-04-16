@@ -1,16 +1,22 @@
-// backend/controllers/progressController.mjs
 import Progress from "../models/Progress.mjs";
-import Level from "../models/Level.mjs";          // ← добавили
+import Level from "../models/Level.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 
-/* ---------- старт ---------- */
+/* ---------- start / reset ---------- */
 export async function startProgress(req, res) {
   try {
     const { userId, levelId, state } = req.body;
-    const [progress] = await Progress.findOrCreate({
+
+    const [progress, created] = await Progress.findOrCreate({
       where: { userId, levelId },
       defaults: { userId, levelId, state, status: "in_progress" },
     });
+
+    if (!created) {
+      progress.state = state;
+      progress.status = "in_progress";
+      await progress.save();
+    }
     return res.json(progress);
   } catch (err) {
     console.error("startProgress:", err);
@@ -25,32 +31,24 @@ export async function makeMove(req, res) {
 
     const progress = await Progress.findOne({ where: { userId, levelId } });
     if (!progress) return res.status(404).json({ error: "Progress not found" });
+
     if (progress.status === "completed")
       return res.status(400).json({ error: "Level already completed" });
 
-    const currState = progress.state;
-
+    const cur = progress.state;
     if (
       from < 0 ||
-      from >= currState.length ||
+      from >= cur.length ||
       to < 0 ||
-      to >= currState.length
-    ) {
-      return res.status(400).json({ error: "Bad tube indices" });
-    }
-
-    if (!canPour(currState[from], currState[to])) {
+      to >= cur.length ||
+      !canPour(cur[from], cur[to])
+    )
       return res.status(400).json({ error: "Illegal move" });
-    }
 
-    /* применяем ход */
-    const { moved, newSource, newTarget } = pour(
-      currState[from],
-      currState[to]
-    );
+    const { moved, newSource, newTarget } = pour(cur[from], cur[to]);
     if (!moved) return res.status(400).json({ error: "Illegal move" });
 
-    const newState = [...currState];
+    const newState = [...cur];
     newState[from] = newSource;
     newState[to] = newTarget;
 
@@ -58,18 +56,18 @@ export async function makeMove(req, res) {
     progress.status = isSolved(newState) ? "completed" : "in_progress";
     await progress.save();
 
-    /* ---------- если решено, создаём следующий уровень ---------- */
+    /* создаём следующий уровень */
     if (progress.status === "completed") {
       const nextLevelId = levelId + 1;
-      const nextLevel = await Level.findByPk(nextLevelId);
-      if (nextLevel) {
+      const next = await Level.findByPk(nextLevelId);
+      if (next) {
         await Progress.findOrCreate({
           where: { userId, levelId: nextLevelId },
           defaults: {
             userId,
             levelId: nextLevelId,
             status: "in_progress",
-            state: JSON.parse(nextLevel.level_data).state,
+            state: JSON.parse(next.level_data).state,
           },
         });
       }
@@ -82,7 +80,7 @@ export async function makeMove(req, res) {
   }
 }
 
-/* ---------- получить текущий прогресс ---------- */
+/* ---------- текущий прогресс ---------- */
 export async function getProgressByUser(req, res) {
   try {
     const { userId } = req.query;
