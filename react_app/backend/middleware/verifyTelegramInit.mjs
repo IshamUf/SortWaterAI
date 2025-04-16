@@ -1,58 +1,63 @@
-// backend/middleware/verifyTelegramInit.mjs
 import crypto from "crypto";
 import User from "../models/User.mjs";
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-if (!BOT_TOKEN) throw new Error("Set TELEGRAM_BOT_TOKEN in env");
+// Получаем и очищаем токен
+const rawToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+console.log(">>> BOT_TOKEN (first 10 chars):", JSON.stringify(rawToken.slice(0, 10)) + "...");
 
-const secretKey = crypto.createHash("sha256").update(BOT_TOKEN).digest();
+// Формируем секретный ключ из SHA-256 токена
+const secretKey = crypto.createHash("sha256").update(rawToken).digest();
+console.log(">>> secretKey (hex):", secretKey.toString("hex"));
 
 export default async function verifyTelegramInit(req, res, next) {
-  // 1) Получаем «сырые» initData
+  // Берём initData из query или заголовка
   const raw = req.query.tgWebAppData || req.get("X-TG-Init-Data");
   console.log(">>> raw initData:", raw);
-  if (!raw) return res.status(401).json({ error: "No initData" });
 
-  // 2) Распарсим все пары ключ=значение
+  if (!raw) {
+    return res.status(401).json({ error: "No initData" });
+  }
+
   const params = new URLSearchParams(raw);
+  // В Telegram WebApp параметр с подписью называется hash
+  const clientHash = params.get("hash");
+  if (!clientHash) {
+    return res.status(401).json({ error: "No hash in initData" });
+  }
 
-  // 3) Смотрим, где у нас подпись: может быть в hash, а может в signature
-  const clientHash = params.get("hash") ?? params.get("signature");
-  console.log(">>> clientHash:", clientHash);
-  if (!clientHash) return res.status(401).json({ error: "No hash" });
-
-  // 4) Убираем оба поля из params, чтобы они не попали в dataCheck
+  // Убираем ключ подписи из параметров для расчёта
   params.delete("hash");
   params.delete("signature");
 
-  // 5) Собираем строку dataCheck из оставшихся полей
+  // Строим строку для проверки: сортируем ключи по алфавиту
   const dataCheck = [...params]
     .map(([k, v]) => `${k}=${v}`)
     .sort()
     .join("\n");
   console.log(">>> dataCheck:\n", dataCheck);
 
-  // 6) Вычисляем HMAC‑SHA256
-  const calcHash = crypto.createHmac("sha256", secretKey)
+  // Считаем HMAC-SHA256
+  const calcHash = crypto
+    .createHmac("sha256", secretKey)
     .update(dataCheck)
     .digest("hex");
+  console.log(">>> clientHash:", clientHash);
   console.log(">>> calcHash:", calcHash);
 
-  // 7) Сравниваем
   if (calcHash !== clientHash) {
     console.log(">>> Signature mismatch!");
     return res.status(401).json({ error: "Bad signature" });
   }
 
-  // 8) Всё ок — извлекаем пользователя и сохраняем в req.user
+  // Если подпись верна — извлекаем пользователя
   const userJson = JSON.parse(decodeURIComponent(params.get("user")));
-  console.log(">>> user payload:", userJson);
-
   const [user] = await User.findOrCreate({
     where: { telegram_id: String(userJson.id) },
     defaults: {
       telegram_id: String(userJson.id),
-      username: userJson.username || `${userJson.first_name || "Player"}_${userJson.id}`,
+      username:
+        userJson.username ||
+        `${userJson.first_name || "Player"}_${userJson.id}`,
       coins: 0,
     },
   });
