@@ -1,4 +1,3 @@
-// backend/middleware/verifyTelegramInit.mjs
 import crypto from "crypto";
 import User from "../models/User.mjs";
 
@@ -19,8 +18,10 @@ export default async function verifyTelegramInit(req, res, next) {
   console.log(">>> clientHash:", hash);
   if (!hash) return res.status(401).json({ error: "No hash" });
 
-  // Строим data_check_string
+  // ❗ Удаляем hash и signature из строки
   params.delete("hash");
+  params.delete("signature"); // <-- ЭТО ОЧЕНЬ ВАЖНО
+
   const dataCheck = [...params]
     .map(([k, v]) => `${k}=${v}`)
     .sort()
@@ -28,8 +29,10 @@ export default async function verifyTelegramInit(req, res, next) {
 
   console.log(">>> dataCheck:\n", dataCheck);
 
-  // Вычисляем хеш через обычный sha256 (НЕ HMAC)
-  const calcHash = crypto.createHash("sha256").update(dataCheck).digest("hex");
+  // SHA-256 HMAC по строке
+  const secretKey = crypto.createHash("sha256").update(BOT_TOKEN).digest();
+  const calcHash = crypto.createHmac("sha256", secretKey).update(dataCheck).digest("hex");
+
   console.log(">>> calcHash:", calcHash);
 
   if (calcHash !== hash) {
