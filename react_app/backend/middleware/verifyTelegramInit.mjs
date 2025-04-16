@@ -9,7 +9,11 @@ if (!BOT_TOKEN) {
   throw new Error("Set TELEGRAM_BOT_TOKEN in env");
 }
 
-const secretKey = crypto.createHash("sha256").update(BOT_TOKEN).digest();
+// 🔥 ВАЖНО: HMAC с ключом 'WebAppData'!
+const secretKey = crypto
+  .createHmac("sha256", "WebAppData")
+  .update(BOT_TOKEN)
+  .digest();
 
 export default async function verifyTelegramInit(req, res, next) {
   const raw = req.query.tgWebAppData || req.get("X-TG-Init-Data");
@@ -22,15 +26,18 @@ export default async function verifyTelegramInit(req, res, next) {
   console.log(">>> clientHash:", hash);
   if (!hash || !signature) return res.status(401).json({ error: "No hash/signature in initData" });
 
-  // Собираем checkString: все параметры кроме hash, в отсортированном виде
+  // Удаляем hash и signature из строки
   params.delete("hash");
   params.delete("signature");
+
+  // Строим dataCheckString
   const dataCheck = [...params]
     .map(([k, v]) => `${k}=${v}`)
     .sort()
     .join("\n");
   console.log(">>> dataCheck:\n", dataCheck);
 
+  // Хэшируем
   const calcHmac = crypto.createHmac("sha256", secretKey).update(dataCheck).digest("hex");
   console.log(">>> calcHash:", calcHmac);
 
@@ -39,7 +46,7 @@ export default async function verifyTelegramInit(req, res, next) {
     return res.status(401).json({ error: "Bad signature" });
   }
 
-  // Если всё ок — парсим user и создаём/ищем запись в БД
+  // Парсим и находим пользователя
   const userJson = JSON.parse(decodeURIComponent(params.get("user")));
   const [user] = await User.findOrCreate({
     where: { telegram_id: String(userJson.id) },
