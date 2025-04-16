@@ -6,14 +6,8 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 console.log(">>> TELEGRAM_BOT_TOKEN:", BOT_TOKEN);
 
 if (!BOT_TOKEN) {
-  throw new Error("Set TELEGRAM_BOT_TOKEN in env");
+  throw new Error("Set TELEGRAM_BOT_TOKEN in .env");
 }
-
-// 🔥 ВАЖНО: HMAC с ключом 'WebAppData'!
-const secretKey = crypto
-  .createHmac("sha256", "WebAppData")
-  .update(BOT_TOKEN)
-  .digest();
 
 export default async function verifyTelegramInit(req, res, next) {
   const raw = req.query.tgWebAppData || req.get("X-TG-Init-Data");
@@ -21,32 +15,29 @@ export default async function verifyTelegramInit(req, res, next) {
   if (!raw) return res.status(401).json({ error: "No initData" });
 
   const params = new URLSearchParams(raw);
-  const signature = params.get("signature");
   const hash = params.get("hash");
   console.log(">>> clientHash:", hash);
-  if (!hash || !signature) return res.status(401).json({ error: "No hash/signature in initData" });
+  if (!hash) return res.status(401).json({ error: "No hash" });
 
-  // Удаляем hash и signature из строки
+  // Строим data_check_string
   params.delete("hash");
-  params.delete("signature");
-
-  // Строим dataCheckString
   const dataCheck = [...params]
     .map(([k, v]) => `${k}=${v}`)
     .sort()
     .join("\n");
+
   console.log(">>> dataCheck:\n", dataCheck);
 
-  // Хэшируем
-  const calcHmac = crypto.createHmac("sha256", secretKey).update(dataCheck).digest("hex");
-  console.log(">>> calcHash:", calcHmac);
+  // Вычисляем хеш через обычный sha256 (НЕ HMAC)
+  const calcHash = crypto.createHash("sha256").update(dataCheck).digest("hex");
+  console.log(">>> calcHash:", calcHash);
 
-  if (calcHmac !== hash) {
+  if (calcHash !== hash) {
     console.error(">>> Signature mismatch!");
     return res.status(401).json({ error: "Bad signature" });
   }
 
-  // Парсим и находим пользователя
+  // Если всё ок — парсим user и ищем/создаём
   const userJson = JSON.parse(decodeURIComponent(params.get("user")));
   const [user] = await User.findOrCreate({
     where: { telegram_id: String(userJson.id) },
