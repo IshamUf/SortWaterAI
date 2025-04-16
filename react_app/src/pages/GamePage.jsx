@@ -121,11 +121,10 @@ function Tube({ tube, index, onClick, selected }) {
         {tube.map((cell, i) => (
           <div
             key={i}
-            className={
-              cell === -1
-                ? "flex-1 h-full mx-[2px] opacity-0" // ← держим высоту
-                : getColorBlock(cell, i, tube)
-            }
+            //! FIX — и у цветных, и у пустых блоков снова есть flex‑1
+            className={`flex-1 mx-[2px] ${
+              cell === -1 ? "opacity-0" : getColorBlock(cell, i, tube)
+            }`}
           />
         ))}
       </div>
