@@ -4,10 +4,12 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 
 const DAILY_COOLDOWN_MS = 5 * 60 * 1000;
-const LS_KEY = "dailyGiftUnlockTime";
+const LOCALSTORAGE_KEY = "dailyGiftUnlockTime";
 
 export default function WelcomePage() {
   const navigate = useNavigate();
+
+  // состояние
   const [username, setUsername] = useState("");
   const [coins, setCoins] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
@@ -16,82 +18,79 @@ export default function WelcomePage() {
   const [leaders, setLeaders] = useState([]);
   const [showLeadersModal, setShowLeadersModal] = useState(false);
 
+  // для «пасхалки»
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
   const TIMEOUT_MS = 30 * 60 * 1000;
 
   useEffect(() => {
-    // инициализация данных пользователя и прогресса
     (async () => {
+      // 1) получаем текущего пользователя (и создаём его в БД по middleware)
       try {
-        // 1) Получаем текущего пользователя
-        const { data: me } = await api.get("/users/me");
-        setUsername(me.username);
-        setCoins(me.coins);
+        const { data: user } = await api.get("/users/me");
+        setUsername(user.username);
+        setCoins(user.coins);
       } catch (e) {
-        console.error("Ошибка при получении пользователя:", e);
+        console.error("Ошибка при GET /users/me:", e);
       }
 
+      // 2) получаем прогресс
       try {
-        // 2) Текущий прогресс
         const { data: prog } = await api.get("/progress");
         setCurrentLevel(prog.levelId);
-      } catch {
+      } catch (e) {
+        // если 404 или 401 — оставляем 1
         setCurrentLevel(1);
       }
 
+      // 3) получаем общее число уровней
       try {
-        // 3) Общее число уровней
         const { data } = await api.get("/levels/count");
-        setTotalLevels(data.count || 0);
+        setTotalLevels(data.count);
       } catch (e) {
-        console.error("Ошибка при получении количества уровней:", e);
-        setTotalLevels(0);
+        console.error("Ошибка при GET /levels/count:", e);
       }
 
-      startCooldownChecker();
+      // 4) проверяем локальный cooldown
+      checkCooldown();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // проверка локального таймера на получение подарка
-  function startCooldownChecker() {
-    const unlockAt = +localStorage.getItem(LS_KEY) || 0;
-    if (Date.now() < unlockAt) {
+  function checkCooldown() {
+    const until = +localStorage.getItem(LOCALSTORAGE_KEY) || 0;
+    if (Date.now() < until) {
       setGiftDisabled(true);
-      setTimeout(startCooldownChecker, unlockAt - Date.now());
+      setTimeout(checkCooldown, until - Date.now());
     } else {
       setGiftDisabled(false);
-      localStorage.removeItem(LS_KEY);
+      localStorage.removeItem(LOCALSTORAGE_KEY);
     }
   }
 
-  // клик «получить подарок»
   async function claimGift() {
     try {
       const { data } = await api.post("/users/me/daily");
       setCoins(data.coins);
-      localStorage.setItem(LS_KEY, Date.now() + DAILY_COOLDOWN_MS);
+      localStorage.setItem(LOCALSTORAGE_KEY, Date.now() + DAILY_COOLDOWN_MS);
       setGiftDisabled(true);
-      setTimeout(startCooldownChecker, DAILY_COOLDOWN_MS);
+      setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
     } catch (e) {
       if (e.response?.status === 429) {
-        // ещё не истёк таймаут
-        setTimeout(startCooldownChecker, DAILY_COOLDOWN_MS);
+        // просто ждём
+        setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
       } else {
-        console.error("Ошибка при получении подарка:", e);
+        console.error("Ошибка при POST /users/me/daily:", e);
       }
     }
   }
 
-  // открываем модалку лидеров
   async function openLeaders() {
     try {
       const { data } = await api.get("/leaderboard");
       setLeaders(data);
       setShowLeadersModal(true);
     } catch (e) {
-      console.error("Ошибка при загрузке лидеров:", e);
+      console.error("Ошибка при GET /leaderboard:", e);
     }
   }
 
@@ -105,7 +104,7 @@ export default function WelcomePage() {
     idleTimer.current = setTimeout(() => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-    }, 60000);
+    }, 60_000);
   }
   function resetIdle() {
     clearTimeout(idleTimer.current);
@@ -125,10 +124,10 @@ export default function WelcomePage() {
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6 overflow-hidden">
       <div className="max-w-lg w-full mx-auto flex flex-col h-full">
-        {/* Header */}
+        {/* — Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-sm font-bold">
+            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center font-bold">
               {username[0]?.toUpperCase() || "?"}
             </div>
             <div>
@@ -144,7 +143,7 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* — Main content */}
         <div className="flex flex-col items-center justify-center flex-grow gap-6">
           <h1 className="text-3xl font-extrabold">SortWaterAI</h1>
           <div className="flex space-x-8">
@@ -152,7 +151,9 @@ export default function WelcomePage() {
               onClick={claimGift}
               disabled={giftDisabled}
               className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl ${
-                giftDisabled ? "bg-gray-600 opacity-60" : "bg-green-600 hover:bg-green-500"
+                giftDisabled
+                  ? "bg-gray-600 opacity-60 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-500 active:scale-95"
               }`}
             >
               🎁
@@ -165,13 +166,15 @@ export default function WelcomePage() {
             </button>
           </div>
 
-          {/* Level Panel */}
+          {/* — Level panel */}
           <div className="bg-gray-800 bg-opacity-60 rounded-2xl p-6 w-full max-w-xs flex flex-col items-center">
             <div className="text-gray-400 text-sm mb-2">
-              {totalLevels ? `Level ${currentLevel}/${totalLevels}` : `Level ${currentLevel}`}
+              {totalLevels
+                ? `Level ${currentLevel}/${totalLevels}`
+                : `Level ${currentLevel}`}
             </div>
             <button
-              onClick={() => navigate("/game")}
+              onClick={() => navigate("/game", { state: { /* можно передать userId */ } })}
               className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
             >
               PLAY
@@ -180,7 +183,7 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* Leaders Modal */}
+      {/* — Leaders Modal */}
       {showLeadersModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
           <div className="bg-gray-800 rounded-xl p-4 w-4/5 max-w-sm relative">
@@ -188,7 +191,7 @@ export default function WelcomePage() {
               onClick={() => setShowLeadersModal(false)}
               className="absolute top-2 right-2 text-white text-2xl"
             >
-              &times;
+              ×
             </button>
             <h3 className="text-lg font-bold mb-4 text-center">Leaderboard</h3>
             <div className="max-h-64 overflow-y-auto">
@@ -196,8 +199,8 @@ export default function WelcomePage() {
                 <thead>
                   <tr>
                     <th>#</th>
-                    <th>User</th>
-                    <th>Done</th>
+                    <th>Username</th>
+                    <th>Completed</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -210,9 +213,7 @@ export default function WelcomePage() {
                   ))}
                   {leaders.length === 0 && (
                     <tr>
-                      <td colSpan="3" className="py-2 text-center">
-                        No data
-                      </td>
+                      <td colSpan="3" className="py-2 text-center">No data</td>
                     </tr>
                   )}
                 </tbody>
