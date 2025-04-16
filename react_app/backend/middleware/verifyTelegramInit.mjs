@@ -1,4 +1,4 @@
-import { InitData } from "@telegram-apps/init-data-node";
+import initData from "@telegram-apps/init-data-node";
 import User from "../models/User.mjs";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -9,31 +9,26 @@ export default async function verifyTelegramInit(req, res, next) {
   console.log(">>> raw initData:", raw);
   if (!raw) return res.status(401).json({ error: "No initData" });
 
-  let initData;
+  let data;
   try {
-    initData = InitData.parse(raw);
+    data = initData.checkInitData(raw, BOT_TOKEN);
   } catch (err) {
-    console.error(">>> InitData parse error:", err);
-    return res.status(400).json({ error: "Invalid initData format" });
+    console.error(">>> Signature check failed:", err.message);
+    return res.status(401).json({ error: "Invalid initData signature" });
   }
 
-  if (!initData.validate(BOT_TOKEN)) {
-    console.error(">>> Signature mismatch!");
-    return res.status(401).json({ error: "Bad signature" });
-  }
+  console.log(">>> verified user:", data.user);
 
-  const user = initData.user;
-  if (!user) return res.status(401).json({ error: "No user in initData" });
-
-  const [dbUser] = await User.findOrCreate({
-    where: { telegram_id: String(user.id) },
+  const userJson = data.user;
+  const [user] = await User.findOrCreate({
+    where: { telegram_id: String(userJson.id) },
     defaults: {
-      telegram_id: String(user.id),
-      username: user.username || `${user.first_name || "Player"}_${user.id}`,
+      telegram_id: String(userJson.id),
+      username: userJson.username || `${userJson.first_name}_${userJson.id}`,
       coins: 0,
     },
   });
 
-  req.user = dbUser;
+  req.user = user;
   next();
 }
