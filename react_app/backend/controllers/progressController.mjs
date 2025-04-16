@@ -1,78 +1,83 @@
 // backend/controllers/progressController.mjs
-import Progress from '../models/Progress.mjs';
+import Progress from "../models/Progress.mjs";
+import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 
-export async function saveProgress(req, res) {
+/** 1. Старт уровня (если записи нет) ****************************************/
+export async function startProgress(req, res) {
   try {
-    const { user_id, level_id, progress_data, completed } = req.body;
-    const newStatus = completed ? "completed" : "in_progress";
+    const { userId, levelId, state } = req.body;
 
-    // Ищем запись по userId и levelId. Если не найдена, создаем новую.
-    const [progress, created] = await Progress.findOrCreate({
-      where: { userId: user_id, levelId: level_id },
-      defaults: {
-        userId: user_id,
-        levelId: level_id,
-        status: newStatus,
-        state: progress_data.state,
-      },
+    const [progress] = await Progress.findOrCreate({
+      where   : { userId, levelId },
+      defaults: { userId, levelId, state, status: "in_progress" },
     });
-
-    // Если запись уже существует, обновляем её.
-    if (!created) {
-      progress.status = newStatus;
-      progress.state = progress_data.state;
-      await progress.save();
-    }
 
     return res.json(progress);
-  } catch (error) {
-    console.error("Error saving progress:", error);
-    return res.status(500).json({ error: "Failed to save progress" });
+  } catch (err) {
+    console.error("startProgress:", err);
+    return res.status(500).json({ error: "Failed to start progress" });
   }
 }
 
-export async function getProgressByUserAndLevel(req, res) {
-  const { userId, levelId } = req.query;
+/** 2. Один ход **************************************************************/
+export async function makeMove(req, res) {
   try {
-    const progress = await Progress.findOne({
-      where: { userId, levelId },
-    });
-    if (!progress) {
-      return res.status(404).json({ message: 'Progress not found' });
+    const { userId, levelId, from, to } = req.body;
+
+    const progress = await Progress.findOne({ where: { userId, levelId } });
+    if (!progress) return res.status(404).json({ error: "Progress not found" });
+    if (progress.status === "completed")
+      return res.status(400).json({ error: "Level already completed" });
+
+    const curState = progress.state;
+    if (
+      from < 0 || from >= curState.length ||
+      to   < 0 || to   >= curState.length
+    ) {
+      return res.status(400).json({ error: "Bad tube indices" });
     }
-    res.json(progress);
-  } catch (error) {
-    console.error("Error getting progress:", error);
-    res.status(500).json({ error: "Failed to get progress" });
+
+    const { moved, newSource, newTarget } = pour(
+      curState[from],
+      curState[to]
+    );
+
+    if (!moved) return res.status(400).json({ error: "Illegal move" });
+
+    const newState = [...curState];
+    newState[from] = newSource;
+    newState[to]   = newTarget;
+
+    progress.state  = newState;
+    progress.status = isSolved(newState) ? "completed" : "in_progress";
+    await progress.save();
+
+    return res.json({
+      state : newState,
+      status: progress.status,
+    });
+  } catch (err) {
+    console.error("makeMove:", err);
+    return res.status(500).json({ error: "Failed to make move" });
   }
 }
 
-export async function getProgressByUserId(req, res) {
+/** 3. Получить текущий in‑progress уровень **********************************/
+export async function getProgressByUser(req, res) {
   try {
     const { userId } = req.query;
-    if (!userId) {
-      return res.status(400).json({ message: 'userId is required' });
-    }
-
-    const progress = await Progress.findOne({
-      where: { userId, status: 'in_progress' },
-      include: ['User', 'Level'], // Если вы настроили ассоциации
-      order: [['updatedAt', 'DESC']]
+    const p = await Progress.findOne({
+      where: { userId, status: "in_progress" },
+      order: [["updatedAt", "DESC"]],
     });
-
-    if (!progress) {
-      return res.status(404).json({ message: 'No in-progress level found for this user' });
-    }
-
-    return res.status(200).json({
-      levelId: progress.levelId,
-      state: progress.state,
-      status: progress.status,
-      // Если нужно, можно добавить level_data, например:
-      level_data: progress.Level ? progress.Level.level_data : null,
+    if (!p) return res.status(404).json({ error: "No progress" });
+    return res.json({
+      levelId: p.levelId,
+      state  : p.state,
+      status : p.status,
     });
-  } catch (error) {
-    console.error("Error in getProgressByUserId:", error);
-    return res.status(500).json({ message: "Server error" });
+  } catch (err) {
+    console.error("getProgressByUser:", err);
+    return res.status(500).json({ error: "Failed" });
   }
 }
