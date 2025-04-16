@@ -37,12 +37,32 @@ function pour(src, dst) {
 const clone = (s) => s.map((t) => [...t]);
 /* ------------------------------------------ */
 
+/* ---------- карта цвета (как было раньше) ---------- */
+function getColorBlock(color, layerIndex, tube) {
+  const base =
+    "w-full h-full mx-auto rounded-none transition-all duration-500 ease-in-out";
+  const isBottomFilled =
+    layerIndex === tube.length - 1 || tube[layerIndex + 1] === -1;
+  const rounded = isBottomFilled ? "rounded-b-full" : "";
+  const colorMap = {
+    0: "bg-[#8CB4C9]",
+    1: "bg-[#C9ADA7]",
+    2: "bg-[#B5CDA3]",
+    3: "bg-[#E0C097]",
+    4: "bg-[#A9A9B3]",
+    5: "bg-[#DAB6C4]",
+    6: "bg-[#A1C6EA]",
+    7: "bg-[#BFCBA8]",
+  };
+  return `${base} ${colorMap[color] || "bg-transparent"} ${rounded} opacity-90`;
+}
+/* --------------------------------------------------- */
+
 export default function GamePage() {
   const navigate = useNavigate();
   const { state: navState } = useLocation();
   const [userId] = useState(navState?.userId || 1);
 
-  /* состояние */
   const [coins, setCoins] = useState(0);
   const [levelId, setLevelId] = useState(null);
   const [state, setState] = useState(null);
@@ -54,7 +74,6 @@ export default function GamePage() {
   /* ---------- инициализация ---------- */
   useEffect(() => {
     (async () => {
-      /* монеты */
       try {
         const u = await api.get(`/users/${userId}`);
         setCoins(u.data.coins);
@@ -62,7 +81,6 @@ export default function GamePage() {
         console.error(e);
       }
 
-      /* текущий прогресс */
       let p;
       try {
         p = (await api.get(`/progress?userId=${userId}`)).data;
@@ -77,7 +95,11 @@ export default function GamePage() {
           levelId: lvl,
           state: data.level_data.state,
         });
-        p = { levelId: lvl, state: data.level_data.state, status: "in_progress" };
+        p = {
+          levelId: lvl,
+          state: data.level_data.state,
+          status: "in_progress",
+        };
       }
       setLevelId(p.levelId);
       setState(p.state);
@@ -110,19 +132,16 @@ export default function GamePage() {
       return;
     }
 
-    /* сохраняем индексы ДО сброса выбора */
     const fromIdx = sel;
     const toIdx = idx;
     setSel(null);
 
-    /* оптимистичный UI */
     const { A, B } = pour(state[fromIdx], state[toIdx]);
     const optimistic = clone(state);
     optimistic[fromIdx] = A;
     optimistic[toIdx] = B;
     setState(optimistic);
 
-    /* подтверждение сервера */
     try {
       const resp = await api.post("/progress/move", {
         userId,
@@ -135,7 +154,7 @@ export default function GamePage() {
       if (resp.data.status === "completed") setShowModal(true);
     } catch (err) {
       console.error("move error:", err?.response?.data || err);
-      setState(state); // откат
+      setState(state);
     }
   };
 
@@ -164,9 +183,7 @@ export default function GamePage() {
         {tube.map((c, j) => (
           <div
             key={j}
-            className={`flex-1 mx-[2px] ${
-              c === -1 ? "opacity-0" : `bg-color-${c}`
-            }`}
+            className={c === -1 ? "flex-1 mx-[2px] opacity-0" : getColorBlock(c, j, tube)}
           />
         ))}
       </div>
@@ -179,7 +196,6 @@ export default function GamePage() {
   return (
     <div className="h-[100dvh] flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6">
       <div className="max-w-lg w-full mx-auto flex flex-col h-full">
-        {/* header */}
         <div className="flex justify-between mb-4">
           <button
             onClick={() => navigate("/")}
@@ -193,7 +209,6 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* поле */}
         <div className="flex flex-col items-center gap-6 flex-grow">
           <div className="text-sm text-gray-400">Level {levelId}</div>
           <h2 className="text-xl font-bold">
@@ -224,7 +239,6 @@ export default function GamePage() {
         </div>
       </div>
 
-      {/* modal */}
       {showModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
           <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
