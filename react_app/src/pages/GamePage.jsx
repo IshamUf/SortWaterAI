@@ -2,300 +2,242 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/api";
 
-/* ---------- Вспомогательные функции (логика игры) ---------- */
-function findTop(tube) {
-  for (let i = 0; i < tube.length; i++) if (tube[i] !== -1) return i;
-  return -1;
-}
-function canPour(source, target) {
-  const fromTop = findTop(source);
-  if (fromTop === -1) return false;
-  const toTop = findTop(target);
-  if (toTop === 0) return false;
-  if (toTop === -1) return true;                     // приёмник пуст
-  return source[fromTop] === target[toTop];          // цвета совпадают
+/* ---------- Локальная логика игры ---------- */
+const findTop = (t) => t.findIndex((c) => c !== -1);
+function canPour(src, dst) {
+  const from = findTop(src);
+  if (from === -1) return false;
+  const to = findTop(dst);
+  if (to === 0) return false;
+  return to === -1 || src[from] === dst[to];
 }
 function pour(src, dst) {
   const A = [...src], B = [...dst];
   let from = findTop(A);
   const color = A[from];
-  let count = 1;
-  for (let i = from + 1; i < A.length && A[i] === color; i++) count++;
+  let cnt = 1;
+  for (let i = from + 1; i < A.length && A[i] === color; i++) cnt++;
 
   let to = findTop(B);
   to = to === -1 ? B.length - 1 : to - 1;
 
   let moved = false;
-  while (count > 0 && to >= 0) {
+  while (cnt > 0 && to >= 0) {
     if (B[to] === -1) {
       B[to] = color;
       A[from] = -1;
       from++;
       to--;
-      count--;
+      cnt--;
       moved = true;
     } else break;
   }
-  return { newSource: A, newTarget: B, moved };
+  return { A, B, moved };
 }
-function cloneState(state) {
-  return state.map((tube) => [...tube]);
-}
-function isSolved(state) {
-  return state.every(
-    (tube) =>
-      tube.every((c) => c === -1) || tube.every((c) => c !== -1 && c === tube[0])
-  );
-}
-/* ----------------------------------------------------------- */
-
-async function fetchCurrentProgress(userId) {
-  try {
-    const { data } = await api.get(`/progress?userId=${userId}`);
-    return {
-      levelId: data.levelId,
-      state: data.state,
-      status: data.status,
-    };
-  } catch (e) {
-    if (e.response?.status === 404) return null;
-    throw e;
-  }
-}
-
-async function startLevel(userId, levelId) {
-  // получаем оригинальный state уровня
-  const { data } = await api.get(`/levels/${levelId}`);
-  await api.post("/progress/start", {
-    userId,
-    levelId,
-    state: data.level_data.state,
-  });
-  return {
-    levelId,
-    state: data.level_data.state,
-    status: "in_progress",
-  };
-}
-
-async function makeMove(userId, levelId, from, to) {
-  const resp = await api.post("/progress/move", { userId, levelId, from, to });
-  return resp.data; // { state, status }
-}
+const clone = (s) => s.map((t) => [...t]);
+/* ------------------------------------------ */
 
 export default function GamePage() {
   const navigate = useNavigate();
   const { state: navState } = useLocation();
   const [userId] = useState(navState?.userId || 1);
-  const [coins, setCoins] = useState(0);
 
+  /* состояние */
+  const [coins, setCoins] = useState(0);
   const [levelId, setLevelId] = useState(null);
-  const [levelState, setLevelState] = useState(null);
+  const [state, setState] = useState(null);
   const [status, setStatus] = useState("in_progress");
 
-  const [selectedTube, setSelectedTube] = useState(null);
-  const [showSolvedModal, setShowSolvedModal] = useState(false);
+  const [sel, setSel] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
-  /* ---------- Инициализация ---------- */
+  /* ---------- инициализация ---------- */
   useEffect(() => {
     (async () => {
+      /* монеты */
       try {
         const u = await api.get(`/users/${userId}`);
         setCoins(u.data.coins);
       } catch (e) {
-        console.error("Ошибка загрузки монет:", e);
+        console.error(e);
       }
 
-      let progress = await fetchCurrentProgress(userId);
-      if (!progress) progress = await startLevel(userId, 1);
-
-      setLevelId(progress.levelId);
-      setLevelState(progress.state);
-      setStatus(progress.status);
-      if (progress.status === "completed") setShowSolvedModal(true);
+      /* текущий прогресс */
+      let p;
+      try {
+        p = (await api.get(`/progress?userId=${userId}`)).data;
+      } catch (e) {
+        if (e.response?.status !== 404) console.error(e);
+      }
+      if (!p) {
+        const lvl = 1;
+        const { data } = await api.get(`/levels/${lvl}`);
+        await api.post("/progress/start", {
+          userId,
+          levelId: lvl,
+          state: data.level_data.state,
+        });
+        p = { levelId: lvl, state: data.level_data.state, status: "in_progress" };
+      }
+      setLevelId(p.levelId);
+      setState(p.state);
+      setStatus(p.status);
+      if (p.status === "completed") setShowModal(true);
     })();
   }, [userId]);
 
-  if (!levelState)
+  if (!state)
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
-        Loading level…
+        Loading…
       </div>
     );
 
-  /* ---------- Обработчик клика по колбе ---------- */
-  async function handleTubeClick(idx) {
+  /* ---------- клик по колбе ---------- */
+  const clickTube = async (idx) => {
     if (status === "completed") return;
 
-    if (selectedTube === null) {
-      // выбираем источник
-      if (levelState[idx][levelState[idx].length - 1] !== -1) {
-        setSelectedTube(idx);
-      }
+    if (sel === null) {
+      if (state[idx][state[idx].length - 1] !== -1) setSel(idx);
+      return;
+    }
+    if (sel === idx) {
+      setSel(null);
+      return;
+    }
+    if (!canPour(state[sel], state[idx])) {
+      setSel(null);
       return;
     }
 
-    if (selectedTube === idx) {
-      setSelectedTube(null);
-      return;
-    }
+    /* сохраняем индексы ДО сброса выбора */
+    const fromIdx = sel;
+    const toIdx = idx;
+    setSel(null);
 
-    if (!canPour(levelState[selectedTube], levelState[idx])) {
-      setSelectedTube(null);
-      return;
-    }
+    /* оптимистичный UI */
+    const { A, B } = pour(state[fromIdx], state[toIdx]);
+    const optimistic = clone(state);
+    optimistic[fromIdx] = A;
+    optimistic[toIdx] = B;
+    setState(optimistic);
 
-    // оптимистичное обновление UI
-    const { newSource, newTarget } = pour(
-      levelState[selectedTube],
-      levelState[idx]
-    );
-    const optimistic = cloneState(levelState);
-    optimistic[selectedTube] = newSource;
-    optimistic[idx] = newTarget;
-    setLevelState(optimistic);
-    setSelectedTube(null);
-
+    /* подтверждение сервера */
     try {
-      const { state, status } = await makeMove(userId, levelId, selectedTube, idx);
-      setLevelState(state);
-      setStatus(status);
-      if (status === "completed") setShowSolvedModal(true);
+      const resp = await api.post("/progress/move", {
+        userId,
+        levelId,
+        from: fromIdx,
+        to: toIdx,
+      });
+      setState(resp.data.state);
+      setStatus(resp.data.status);
+      if (resp.data.status === "completed") setShowModal(true);
     } catch (err) {
-      console.error("Сервер отклонил ход:", err?.response?.data || err);
-      // откат UI
-      setLevelState(levelState);
+      console.error("move error:", err?.response?.data || err);
+      setState(state); // откат
     }
-  }
+  };
 
-  /* ---------- Сброс уровня ---------- */
-  async function handleResetLevel() {
-    try {
-      const progress = await startLevel(userId, levelId);
-      setLevelState(progress.state);
-      setStatus("in_progress");
-      setSelectedTube(null);
-    } catch (err) {
-      console.error("Ошибка при сбросе уровня:", err);
-    }
-  }
+  /* ---------- сброс ---------- */
+  const reset = async () => {
+    const { data } = await api.get(`/levels/${levelId}`);
+    await api.post("/progress/start", {
+      userId,
+      levelId,
+      state: data.level_data.state,
+    });
+    setState(data.level_data.state);
+    setStatus("in_progress");
+    setSel(null);
+  };
 
-  /* ---------- Отрисовка ---------- */
-  const topRow = levelState.slice(0, 4);
-  const bottomRow = levelState.length > 4 ? levelState.slice(4) : [];
-
-  function getColorBlock(color, layerIndex, tube) {
-    const base =
-      "w-full h-full mx-auto rounded-none transition-all duration-500 ease-in-out";
-    const isBottomFilled =
-      layerIndex === tube.length - 1 || tube[layerIndex + 1] === -1;
-    const rounded = isBottomFilled ? "rounded-b-full" : "";
-    const colorMap = {
-      0: "bg-[#8CB4C9]",
-      1: "bg-[#C9ADA7]",
-      2: "bg-[#B5CDA3]",
-      3: "bg-[#E0C097]",
-      4: "bg-[#A9A9B3]",
-      5: "bg-[#DAB6C4]",
-      6: "bg-[#A1C6EA]",
-      7: "bg-[#BFCBA8]",
-    };
-    return `${base} ${colorMap[color] || "bg-transparent"} ${rounded} opacity-90`;
-  }
-
-  function Tube({ tube, index }) {
-    return (
-      <div
-        className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch cursor-pointer ${
-          selectedTube === index ? "border-blue-400" : "border-[#3B3F45]"
-        } bg-transparent overflow-hidden`}
-        onClick={() => handleTubeClick(index)}
-      >
-        <div className="flex flex-col justify-end pt-2 h-full">
-          {tube.map((cell, i) => (
-            <div
-              key={i}
-              className={`flex-1 mx-[2px] transition-opacity duration-500 ${
-                cell === -1 ? "opacity-0" : getColorBlock(cell, i, tube)
-              }`}
-            />
-          ))}
-        </div>
+  /* ---------- UI ---------- */
+  const Tube = ({ tube, i }) => (
+    <div
+      onClick={() => clickTube(i)}
+      className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch cursor-pointer ${
+        sel === i ? "border-blue-400" : "border-[#3B3F45]"
+      } bg-transparent overflow-hidden`}
+    >
+      <div className="flex flex-col justify-end pt-2 h-full">
+        {tube.map((c, j) => (
+          <div
+            key={j}
+            className={`flex-1 mx-[2px] ${
+              c === -1 ? "opacity-0" : `bg-color-${c}`
+            }`}
+          />
+        ))}
       </div>
-    );
-  }
+    </div>
+  );
+
+  const top = state.slice(0, 4),
+    bottom = state.slice(4);
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
-      <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
-        {/* ---- Header ---- */}
-        <div className="flex justify-between items-center mb-4">
+    <div className="h-[100dvh] flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6">
+      <div className="max-w-lg w-full mx-auto flex flex-col h-full">
+        {/* header */}
+        <div className="flex justify-between mb-4">
           <button
-            className="bg-gray-700 px-3 py-1.5 rounded-full text-sm hover:bg-gray-600 transition"
             onClick={() => navigate("/")}
+            className="bg-gray-700 px-3 py-1.5 rounded-full text-sm"
           >
             &larr; Main
           </button>
-          <div className="bg-gray-700 px-3 py-1.5 rounded-full flex items-center space-x-1 text-sm">
+          <div className="bg-gray-700 px-3 py-1.5 rounded-full text-sm flex items-center space-x-1">
             <span className="font-semibold">{coins}</span>
             <span className="text-yellow-400">🪙</span>
           </div>
         </div>
 
-        {/* ---- Game field ---- */}
-        <div className="flex flex-col items-center justify-center flex-grow gap-6">
-          <div className="text-center text-sm text-gray-400">
-            Level {levelId}
-          </div>
+        {/* поле */}
+        <div className="flex flex-col items-center gap-6 flex-grow">
+          <div className="text-sm text-gray-400">Level {levelId}</div>
           <h2 className="text-xl font-bold">
-            {status === "completed" ? "Level Solved!" : "Keep playing..."}
+            {status === "completed" ? "Level Solved!" : "Keep playing…"}
           </h2>
 
           <div className="flex flex-col gap-4">
             <div className="flex justify-center gap-4">
-              {topRow.map((tube, i) => (
-                <Tube key={i} tube={tube} index={i} />
+              {top.map((t, i) => (
+                <Tube key={i} tube={t} i={i} />
               ))}
             </div>
-            {bottomRow.length > 0 && (
+            {bottom.length > 0 && (
               <div className="flex justify-center gap-4">
-                {bottomRow.map((tube, idx) => {
-                  const realIdx = idx + topRow.length;
-                  return (
-                    <Tube
-                      key={realIdx}
-                      tube={tube}
-                      index={realIdx}
-                    />
-                  );
-                })}
+                {bottom.map((t, i) => (
+                  <Tube key={i + 4} tube={t} i={i + 4} />
+                ))}
               </div>
             )}
           </div>
 
           <button
-            onClick={handleResetLevel}
-            className="bg-red-600 hover:bg-red-500 px-3 py-2 rounded-full w-full text-center font-semibold transition max-w-xs"
+            onClick={reset}
+            className="bg-red-600 px-3 py-2 rounded-full max-w-xs w-full"
           >
             Reset Level
           </button>
         </div>
       </div>
 
-      {/* ---- Solved modal ---- */}
-      {showSolvedModal && (
+      {/* modal */}
+      {showModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
           <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
             <h3 className="text-lg font-bold mb-4">Уровень пройден!</h3>
             <div className="flex flex-col space-y-3">
               <button
-                className="bg-blue-600 px-4 py-2 rounded hover:bg-blue-700"
+                className="bg-blue-600 px-4 py-2 rounded"
                 onClick={() => window.location.reload()}
               >
                 Continue
               </button>
               <button
-                className="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition"
+                className="bg-gray-700 px-4 py-2 rounded"
                 onClick={() => navigate("/")}
               >
                 Main
