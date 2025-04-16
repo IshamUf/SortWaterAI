@@ -20,7 +20,7 @@ export default function WelcomePage() {
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
   const endTimer = useRef(null);
-  const timeoutDuration = 10 * 60 * 1000;
+  const timeoutDuration = 30 * 60 * 1000;
 
   useEffect(() => {
     async function initUserAndProgress() {
@@ -33,9 +33,7 @@ export default function WelcomePage() {
       ) {
         const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
         tgUserId = tgUser.id;
-        tgUsername =
-          tgUser.first_name +
-          (tgUser.last_name ? " " + tgUser.last_name : "");
+        tgUsername = tgUser.username || `${tgUser.first_name}${tgUser.last_name ? " " + tgUser.last_name : ""}`;
         window.Telegram.WebApp.expand();
       }
       if (!tgUserId) {
