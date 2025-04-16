@@ -3,7 +3,6 @@ import User from "../models/User.mjs";
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 console.log(">>> TELEGRAM_BOT_TOKEN:", BOT_TOKEN);
-
 if (!BOT_TOKEN) throw new Error("Set TELEGRAM_BOT_TOKEN");
 
 export default async function verifyTelegramInit(req, res, next) {
@@ -11,33 +10,36 @@ export default async function verifyTelegramInit(req, res, next) {
   console.log(">>> raw initData:", raw);
   if (!raw) return res.status(401).json({ error: "No initData" });
 
-  const rawParams = new URLSearchParams(raw);
-  const clientHash = rawParams.get("hash");
-  if (!clientHash) return res.status(401).json({ error: "Missing hash" });
+  // 👇 manually split without decoding values
+  const params = raw.split("&")
+    .map(kv => kv.split("="))
+    .filter(([k]) => k !== "hash" && k !== "signature")
+    .sort(([a], [b]) => a.localeCompare(b));
 
-  const dataToCheck = [...rawParams.entries()]
-    .filter(([key]) => key !== "hash" && key !== "signature")
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([key, val]) => `${key}=${val}`)
-    .join("\n");
+  const dataCheck = params.map(([k, v]) => `${k}=${v}`).join("\n");
+  console.log(">>> dataCheck:\n", dataCheck);
 
-  console.log(">>> dataCheck:\n", dataToCheck);
+  const clientHash = raw.match(/(?:^|&)hash=([a-f0-9]+)/)?.[1];
+  console.log(">>> clientHash:", clientHash);
 
   const secret = crypto.createHash("sha256").update(BOT_TOKEN).digest();
   const calcHash = crypto
     .createHmac("sha256", secret)
-    .update(dataToCheck)
+    .update(dataCheck)
     .digest("hex");
 
-  console.log(">>> clientHash:", clientHash);
   console.log(">>> calcHash:  ", calcHash);
 
-  if (calcHash !== clientHash) {
+  if (clientHash !== calcHash) {
     console.error(">>> Signature mismatch!");
     return res.status(401).json({ error: "Bad signature" });
   }
 
-  const userJson = JSON.parse(rawParams.get("user"));
+  // ✅ Парсим user после валидации
+  const userMatch = raw.match(/user=([^&]+)/);
+  if (!userMatch) return res.status(401).json({ error: "No user field" });
+
+  const userJson = JSON.parse(decodeURIComponent(userMatch[1]));
   const [user] = await User.findOrCreate({
     where: { telegram_id: String(userJson.id) },
     defaults: {
