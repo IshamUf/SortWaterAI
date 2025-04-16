@@ -98,7 +98,6 @@ export default function GamePage() {
       const u = await api.get(`/users/${userId}`).catch(() => null);
       if (u) setCoins(u.data.coins);
 
-      /* пробуем получить in‑progress */
       let p;
       try {
         p = (await api.get(`/progress?userId=${userId}`)).data;
@@ -106,7 +105,6 @@ export default function GamePage() {
         if (e.response?.status !== 404) console.error(e);
       }
 
-      /* если нет — стартуем уровень 1 */
       if (!p) {
         const first = await api.get("/levels/1");
         await api.post("/progress/start", {
@@ -135,7 +133,6 @@ export default function GamePage() {
 
   const solved = isSolved(state);
 
-  /* ---------- клик по Tube ---------- */
   const clickTube = async (idx) => {
     if (solved) return;
     if (selected === null) {
@@ -151,7 +148,6 @@ export default function GamePage() {
       return;
     }
 
-    /* локальное оптимистичное обновление */
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = clone(state);
     optimistic[selected] = newSource;
@@ -161,7 +157,6 @@ export default function GamePage() {
     const to = idx;
     setSelected(null);
 
-    /* отправляем ход серверу */
     try {
       const resp = await api.post("/progress/move", {
         userId,
@@ -175,11 +170,10 @@ export default function GamePage() {
       }
     } catch (e) {
       console.error("move error:", e?.response?.data || e);
-      setState(state); // откат
+      setState(state);
     }
   };
 
-  /* ---------- Reset ---------- */
   const resetLevel = async () => {
     const { data } = await api.get(`/levels/${levelId}`);
     await api.post("/progress/start", {
@@ -191,15 +185,14 @@ export default function GamePage() {
     setSelected(null);
   };
 
-  /* ---------- UI ---------- */
   const topRow = state.slice(0, 4);
   const bottomRow = state.slice(4);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6">
-      <div className="w-[390px] h-[844px] bg-gray-900 rounded-3xl shadow-xl flex flex-col text-white relative overflow-hidden">
-        {/* header */}
-        <div className="flex justify-between items-center px-6 pt-6">
+    <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
+      <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
+        {/* HEADER */}
+        <div className="flex justify-between items-center mb-6 px-4">
           <button
             onClick={() => navigate("/")}
             className="bg-gray-700 px-3 py-1.5 rounded-full text-sm"
@@ -212,7 +205,7 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* field */}
+        {/* FIELD */}
         <div className="flex flex-col flex-grow px-4 py-4 items-center">
           <div className="text-sm text-gray-400 mb-2">Level {levelId}</div>
           <h2 className="text-xl font-bold mb-4">
@@ -254,7 +247,7 @@ export default function GamePage() {
           </button>
         </div>
 
-        {/* modal */}
+        {/* MODAL */}
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
