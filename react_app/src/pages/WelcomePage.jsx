@@ -1,4 +1,4 @@
-// frontend/pages/WelcomePage.jsx
+// src/pages/WelcomePage.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
@@ -12,184 +12,143 @@ export default function WelcomePage() {
   const [username, setUsername] = useState("");
   const [coins, setCoins] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
-  const [totalLevels, setTotalLevels] = useState(0);          // NEW
-  const [isGiftDisabled, setIsGiftDisabled] = useState(true);
+  const [totalLevels, setTotalLevels] = useState(0);
+  const [giftDisabled, setGiftDisabled] = useState(true);
+  const [leaders, setLeaders] = useState([]);
   const [showLeadersModal, setShowLeadersModal] = useState(false);
-  const [leaderboardData, setLeaderboardData] = useState([]);
-  const [showClowns, setShowClowns] = useState(false);
-  const [clownExplosion, setClownExplosion] = useState(false);
 
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
-  const endTimer = useRef(null);
-  const timeoutDuration = 30 * 60 * 1000;
+  const timeoutMs = 30 * 60 * 1000;
 
   useEffect(() => {
-    async function init() {
-      await initUserAndProgress();
-      await loadLevelsCount();        // NEW
-    }
-    init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  /** Получаем общее количество уровней */
-  async function loadLevelsCount() {
-    try {
-      const resp = await api.get("/levels/count");
-      setTotalLevels(resp.data.count || 0);
-    } catch (err) {
-      console.error("Ошибка при получении количества уровней:", err);
-    }
-  }
-
-  /** Создаём / получаем пользователя + текущий прогресс */
-  async function initUserAndProgress() {
-    let tgUserId, tgUsername;
-    if (
-      window.Telegram?.WebApp?.initDataUnsafe?.user
-    ) {
-      const u = window.Telegram.WebApp.initDataUnsafe.user;
-      tgUserId = u.id;
-      tgUsername = u.username || `${u.first_name}${u.last_name ? " " + u.last_name : ""}`;
-      window.Telegram.WebApp.expand();
-    }
-    if (!tgUserId) {
-      tgUserId = "123456";
-      tgUsername = "Test User";
-    }
-    try {
-      const userResp = await api.post("/users/orCreate", {
-        telegram_id: tgUserId.toString(),
-        username: tgUsername,
-      });
-      const userData = userResp.data;
-      setUserId(userData.id);
-      setUsername(userData.username);
-      setCoins(userData.coins);
+    (async () => {
+      // 1) OrCreate + getSelf
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+      const telegram_id = tgUser ? tgUser.id.toString() : "123456";
+      const name = tgUser
+        ? tgUser.username || `${tgUser.first_name} ${tgUser.last_name || ""}`.trim()
+        : "Test User";
 
       try {
-        const progResp = await api.get(`/progress?userId=${userData.id}`);
-        setCurrentLevel(progResp.data.levelId);
+        const { data: user } = await api.post("/users/orCreate", {
+          telegram_id,
+          username: name,
+        });
+        setUserId(user.id);
+        setUsername(user.username);
+        setCoins(user.coins);
       } catch (e) {
-        if (e.response?.status !== 404) console.error("Ошибка прогресса:", e);
+        console.error("Ошибка создания/получения user:", e);
+      }
+
+      // 2) Fetch self
+      try {
+        const { data: self } = await api.get("/users/" + userId);
+        setCoins(self.coins);
+      } catch (e) {
+        // ignore
+      }
+
+      // 3) Progress
+      try {
+        const { data: p } = await api.get(`/progress?userId=${userId}`);
+        setCurrentLevel(p.levelId);
+      } catch {
         setCurrentLevel(1);
       }
-    } catch (error) {
-      console.error("Ошибка user init:", error);
-      setCurrentLevel(1);
-    }
-    checkLocalCooldown();
-  }
 
-  function checkLocalCooldown() {
-    const storedTime = localStorage.getItem(LOCALSTORAGE_KEY);
-    if (!storedTime) return setIsGiftDisabled(false);
-    const unlockTime = parseInt(storedTime, 10);
-    if (isNaN(unlockTime)) {
-      localStorage.removeItem(LOCALSTORAGE_KEY);
-      return setIsGiftDisabled(false);
-    }
-    const now = Date.now();
-    if (now < unlockTime) {
-      setIsGiftDisabled(true);
-      setTimeout(() => {
-        setIsGiftDisabled(false);
-        localStorage.removeItem(LOCALSTORAGE_KEY);
-      }, unlockTime - now);
+      // 4) Total levels
+      try {
+        const { data } = await api.get("/levels/count");
+        setTotalLevels(data.count);
+      } catch {
+        setTotalLevels(0);
+      }
+
+      checkCooldown();
+    })();
+  // eslint-disable-next-line
+  }, [userId]);
+
+  function checkCooldown() {
+    const t = +localStorage.getItem(LOCALSTORAGE_KEY) || 0;
+    if (Date.now() < t) {
+      setGiftDisabled(true);
+      setTimeout(checkCooldown, t - Date.now());
     } else {
-      setIsGiftDisabled(false);
+      setGiftDisabled(false);
       localStorage.removeItem(LOCALSTORAGE_KEY);
     }
   }
 
-  const handleDailyGift = async () => {
+  const claimGift = async () => {
     try {
-      const resp = await api.post(`/users/${userId}/daily`);
-      setCoins(resp.data.coins);
-      lockButtonFor5Minutes();
-    } catch (err) {
-      if (err.response?.status === 429) lockButtonFor5Minutes();
-      else console.error(err);
+      const { data } = await api.post(`/users/${userId}/daily`);
+      setCoins(data.coins);
+      localStorage.setItem(LOCALSTORAGE_KEY, Date.now() + DAILY_COOLDOWN_MS);
+      setGiftDisabled(true);
+      setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
+    } catch (e) {
+      if (e.response?.status === 429) {
+        setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
+      } else {
+        console.error(e);
+      }
     }
   };
 
-  function lockButtonFor5Minutes() {
-    const unlockTime = Date.now() + DAILY_COOLDOWN_MS;
-    localStorage.setItem(LOCALSTORAGE_KEY, unlockTime.toString());
-    setIsGiftDisabled(true);
-    setTimeout(() => {
-      setIsGiftDisabled(false);
-      localStorage.removeItem(LOCALSTORAGE_KEY);
-    }, DAILY_COOLDOWN_MS);
-  }
-
-  const openLeadersModal = async () => {
+  const openLeaders = async () => {
     try {
-      const resp = await api.get("/leaderboard");
-      setLeaderboardData(resp.data);
+      const { data } = await api.get("/leaderboard");
+      setLeaders(data);
       setShowLeadersModal(true);
-    } catch (err) {
-      console.error("Ошибка таблицы лидеров:", err);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const closeLeadersModal = () => setShowLeadersModal(false);
-
-  const triggerEasterEgg = () => {
-    setShowClowns(true);
-    setClownExplosion(true);
+  // Easter Egg
+  const triggerEgg = () => {
     if (!audioRef.current) {
       audioRef.current = new Audio("/background.mp3");
       audioRef.current.loop = true;
     }
-    audioRef.current.play().catch(console.log);
-    endTimer.current = setTimeout(() => {
+    audioRef.current.play().catch(() => {});
+    idleTimer.current = setTimeout(() => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-      setShowClowns(false);
-      setClownExplosion(false);
     }, 60000);
   };
-
-  const resetIdleTimer = () => {
+  const resetIdle = () => {
     clearTimeout(idleTimer.current);
-    clearTimeout(endTimer.current);
     audioRef.current?.pause();
     if (audioRef.current) audioRef.current.currentTime = 0;
-    setShowClowns(false);
-    setClownExplosion(false);
-    idleTimer.current = setTimeout(triggerEasterEgg, timeoutDuration);
+    idleTimer.current = setTimeout(triggerEgg, timeoutMs);
   };
-
   useEffect(() => {
-    window.addEventListener("click", resetIdleTimer);
-    resetIdleTimer();
+    window.addEventListener("click", resetIdle);
+    resetIdle();
     return () => {
-      window.removeEventListener("click", resetIdleTimer);
+      window.removeEventListener("click", resetIdle);
       clearTimeout(idleTimer.current);
-      clearTimeout(endTimer.current);
     };
   }, []);
 
-  const navigateToGame = () => navigate("/game", { state: { userId } });
-
   return (
-    <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
-      <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
-        {/* --- HEADER (user + coins) --- */}
+    <div className="h-[100dvh] w-full flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6 overflow-hidden">
+      <div className="max-w-lg w-full mx-auto flex flex-col h-full">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-sm font-bold">
-              {username ? username[0].toUpperCase() : "?"}
+            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center font-bold">
+              {username[0]?.toUpperCase() || "?"}
             </div>
             <div>
               <div className="font-semibold text-sm break-words w-32">
                 {username || "Loading..."}
               </div>
-              <div className="text-yellow-300 text-xs flex items-center">
-                🏆 {currentLevel}
-              </div>
+              <div className="text-yellow-300 text-xs">🏆 {currentLevel}</div>
             </div>
           </div>
           <div className="bg-gray-700 px-3 py-1.5 rounded-full flex items-center space-x-1 text-sm">
@@ -198,47 +157,35 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* --- MAIN CONTENT --- */}
+        {/* Content */}
         <div className="flex flex-col items-center justify-center flex-grow gap-6">
-          <h1 className="text-3xl font-extrabold text-center">SortWaterAi</h1>
-
-          {/* buttons row */}
-          <div className="flex justify-center space-x-8">
-            <div className="flex flex-col items-center text-sm">
-              <button
-                onClick={handleDailyGift}
-                disabled={isGiftDisabled}
-                className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-transform ${
-                  isGiftDisabled
-                    ? "bg-gray-600 cursor-not-allowed opacity-60"
-                    : "bg-green-600 hover:bg-green-500 active:scale-95"
-                }`}
-              >
-                🎁
-              </button>
-              <div className="mt-1 font-semibold text-xs">FREE DAILY GIFT</div>
-            </div>
-            <div
-              className="flex flex-col items-center text-sm cursor-pointer"
-              onClick={openLeadersModal}
+          <h1 className="text-3xl font-extrabold">SortWaterAI</h1>
+          <div className="flex space-x-8">
+            <button
+              onClick={claimGift}
+              disabled={giftDisabled}
+              className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl ${
+                giftDisabled ? "bg-gray-600 opacity-60" : "bg-green-600 hover:bg-green-500"
+              }`}
             >
-              <div className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl">
-                📊
-              </div>
-              <div className="mt-1 font-semibold text-xs">LEADERS</div>
-            </div>
+              🎁
+            </button>
+            <button
+              onClick={openLeaders}
+              className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl"
+            >
+              📊
+            </button>
           </div>
 
-          {/* level panel */}
+          {/* Level Panel */}
           <div className="bg-gray-800 bg-opacity-60 rounded-2xl p-6 w-full max-w-xs flex flex-col items-center">
-            <div className="text-center text-sm text-gray-400 mb-2">
-              {totalLevels
-                ? `Level ${currentLevel}/${totalLevels}`
-                : `Level ${currentLevel}`}
+            <div className="text-gray-400 text-sm mb-2">
+              {totalLevels ? `Level ${currentLevel}/${totalLevels}` : `Level ${currentLevel}`}
             </div>
             <button
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl font-bold text-xl shadow-md hover:scale-105 transition"
-              onClick={navigateToGame}
+              onClick={() => navigate("/game", { state: { userId } })}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
             >
               PLAY
             </button>
@@ -246,13 +193,13 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* leader modal */}
+      {/* Leaders Modal */}
       {showLeadersModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
           <div className="bg-gray-800 rounded-xl p-4 w-4/5 max-w-sm relative">
             <button
-              onClick={closeLeadersModal}
-              className="absolute top-2 right-2 text-white text-2xl font-bold"
+              onClick={() => setShowLeadersModal(false)}
+              className="absolute top-2 right-2 text-white text-2xl"
             >
               &times;
             </button>
@@ -261,14 +208,14 @@ export default function WelcomePage() {
               <table className="w-full text-left text-sm text-gray-200">
                 <thead>
                   <tr>
-                    <th className="pb-2">#</th>
-                    <th className="pb-2">Username</th>
-                    <th className="pb-2">Completed</th>
+                    <th>#</th>
+                    <th>User</th>
+                    <th>Done</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {leaderboardData.length ? (
-                    leaderboardData.map((e, i) => (
+                  {leaders.length ? (
+                    leaders.map((e, i) => (
                       <tr key={i} className="border-t border-gray-700">
                         <td className="py-1">{i + 1}</td>
                         <td className="py-1">{e.username}</td>
@@ -277,33 +224,13 @@ export default function WelcomePage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="3" className="py-2 text-center">
-                        No data available.
-                      </td>
+                      <td colSpan="3" className="py-2 text-center">No data</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-        </div>
-      )}
-
-      {showClowns && (
-        <div className="absolute inset-0 pointer-events-none z-40">
-          {Array.from({ length: 15 }, (_, i) => (
-            <div
-              key={i}
-              className="absolute text-3xl animate-bounce"
-              style={{
-                top: `${Math.random() * 80 + 10}%`,
-                left: `${Math.random() * 80 + 10}%`,
-                transform: `translate(-50%, -50%) rotate(${Math.random() * 360}deg)`,
-              }}
-            >
-              🤡
-            </div>
-          ))}
         </div>
       )}
     </div>
