@@ -11,17 +11,15 @@ export default async function verifyTelegramInit(req, res, next) {
   console.log(">>> raw initData:", raw);
   if (!raw) return res.status(401).json({ error: "No initData" });
 
-  // Разбор вручную
   const paramsObj = {};
   raw.split("&").forEach((pair) => {
     const [key, value] = pair.split("=");
     paramsObj[key] = value;
   });
 
-  const clientHash = paramsObj["hash"];
-  if (!clientHash) return res.status(401).json({ error: "No hash" });
+  const signature = paramsObj["signature"];
+  if (!signature) return res.status(401).json({ error: "No signature" });
 
-  // Формируем data_check_string
   const dataCheck = Object.entries(paramsObj)
     .filter(([key]) => key !== "hash" && key !== "signature")
     .sort(([a], [b]) => a.localeCompare(b))
@@ -29,21 +27,20 @@ export default async function verifyTelegramInit(req, res, next) {
     .join("\n");
 
   console.log(">>> dataCheck:\n", dataCheck);
-  console.log(">>> clientHash:", clientHash);
 
-  const calcHash = crypto
+  const calcSignature = crypto
     .createHmac("sha256", secret)
     .update(dataCheck)
-    .digest("hex");
+    .digest("base64url"); // <--- ВАЖНО
 
-  console.log(">>> calcHash:  ", calcHash);
+  console.log(">>> clientSignature:", signature);
+  console.log(">>> calcSignature:  ", calcSignature);
 
-  if (calcHash !== clientHash) {
+  if (signature !== calcSignature) {
     console.error(">>> Signature mismatch!");
     return res.status(401).json({ error: "Bad signature" });
   }
 
-  // 👇 user достаём и ДЕКОДИРУЕМ только после проверки
   const userRaw = decodeURIComponent(paramsObj["user"]);
   const userJson = JSON.parse(userRaw);
 
