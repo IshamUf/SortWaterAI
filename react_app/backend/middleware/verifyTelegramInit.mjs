@@ -4,49 +4,45 @@ import User from "../models/User.mjs";
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 console.log(">>> TELEGRAM_BOT_TOKEN:", BOT_TOKEN);
 
-if (!BOT_TOKEN) {
-  throw new Error("Set TELEGRAM_BOT_TOKEN in .env");
-}
+if (!BOT_TOKEN) throw new Error("Set TELEGRAM_BOT_TOKEN");
 
 export default async function verifyTelegramInit(req, res, next) {
   const raw = req.query.tgWebAppData || req.get("X-TG-Init-Data");
   console.log(">>> raw initData:", raw);
   if (!raw) return res.status(401).json({ error: "No initData" });
 
-  const params = new URLSearchParams(raw);
-  const hash = params.get("hash");
-  console.log(">>> clientHash:", hash);
-  if (!hash) return res.status(401).json({ error: "No hash" });
+  const rawParams = new URLSearchParams(raw);
+  const clientHash = rawParams.get("hash");
+  if (!clientHash) return res.status(401).json({ error: "Missing hash" });
 
-  // ❗ Удаляем hash и signature из строки
-  params.delete("hash");
-  params.delete("signature"); // <-- ЭТО ОЧЕНЬ ВАЖНО
-
-  const dataCheck = [...params]
-    .map(([k, v]) => `${k}=${v}`)
-    .sort()
+  const dataToCheck = [...rawParams.entries()]
+    .filter(([key]) => key !== "hash" && key !== "signature")
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, val]) => `${key}=${val}`)
     .join("\n");
 
-  console.log(">>> dataCheck:\n", dataCheck);
+  console.log(">>> dataCheck:\n", dataToCheck);
 
-  // SHA-256 HMAC по строке
-  const secretKey = crypto.createHash("sha256").update(BOT_TOKEN).digest();
-  const calcHash = crypto.createHmac("sha256", secretKey).update(dataCheck).digest("hex");
+  const secret = crypto.createHash("sha256").update(BOT_TOKEN).digest();
+  const calcHash = crypto
+    .createHmac("sha256", secret)
+    .update(dataToCheck)
+    .digest("hex");
 
-  console.log(">>> calcHash:", calcHash);
+  console.log(">>> clientHash:", clientHash);
+  console.log(">>> calcHash:  ", calcHash);
 
-  if (calcHash !== hash) {
+  if (calcHash !== clientHash) {
     console.error(">>> Signature mismatch!");
     return res.status(401).json({ error: "Bad signature" });
   }
 
-  // Если всё ок — парсим user и ищем/создаём
-  const userJson = JSON.parse(decodeURIComponent(params.get("user")));
+  const userJson = JSON.parse(rawParams.get("user"));
   const [user] = await User.findOrCreate({
     where: { telegram_id: String(userJson.id) },
     defaults: {
       telegram_id: String(userJson.id),
-      username: userJson.username || `${userJson.first_name || "Player"}_${userJson.id}`,
+      username: userJson.username || `${userJson.first_name}_${userJson.id}`,
       coins: 0,
     },
   });
