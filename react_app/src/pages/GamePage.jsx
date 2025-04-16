@@ -2,55 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/api";
 
-/* ---------- запросы к API ---------- */
-async function fetchLevelDataForUser(userId) {
-  try {
-    const { data } = await api.get(`/progress?userId=${userId}`);
-    if (data?.state)
-      return {
-        Level_id: data.levelId,
-        state: data.state,
-        completed: data.status === "completed",
-      };
-    return await fallbackToLevel(1);
-  } catch (e) {
-    if (e.response?.status === 404) return await fallbackToLevel(1);
-    console.error("Ошибка загрузки прогресса:", e);
-    return null;
-  }
-}
-async function fallbackToLevel(levelId) {
-  const { data } = await api.get(`/levels/${levelId}`);
-  return {
-    Level_id: data.id,
-    state: data.level_data.state,
-    completed: false,
-  };
-}
-async function saveProgress(userId, levelId, state, completed = false) {
-  await api.post("/progress", {
-    user_id: userId,
-    level_id: levelId,
-    progress_data: { state },
-    completed,
-  });
-}
-async function setNextLevelAsInProgress(userId, nextLevelId) {
-  try {
-    const { data } = await api.get(`/levels/${nextLevelId}`);
-    await api.post("/progress", {
-      user_id: userId,
-      level_id: data.id,
-      progress_data: { state: data.level_data.state },
-      completed: false,
-    });
-  } catch (e) {
-    console.error("Ошибка назначения следующего уровня:", e);
-  }
-}
-/* ----------------------------------- */
-
-/* ---------- игровая логика ---------- */
+/* ---------- утилиты ---------- */
 const findTop = (tube) => tube.findIndex((c) => c !== -1);
 const clone = (s) => s.map((t) => [...t]);
 
@@ -66,13 +18,10 @@ function pour(src, dst) {
     B = [...dst];
   let f = findTop(A);
   const color = A[f];
-
   let cnt = 1;
   for (let i = f + 1; i < A.length && A[i] === color; i++) cnt++;
-
   let t = findTop(B);
   t = t === -1 ? B.length - 1 : t - 1;
-
   while (cnt > 0 && t >= 0 && B[t] === -1) {
     B[t] = color;
     A[f] = -1;
@@ -82,19 +31,15 @@ function pour(src, dst) {
   }
   return { newSource: A, newTarget: B };
 }
-
-/* ✔ условие победы: каждый тюб — или пуст, или полностью одного цвета */
 function isSolved(state) {
-  return state.every((tube) => {
-    if (tube.every((c) => c === -1)) return true;          // пустая
-    const first = tube[0];
-    if (first === -1) return false;                        // дырка сверху
-    return tube.every((c) => c === first);                 // все одинаковы
-  });
+  return state.every(
+    (tube) =>
+      tube.every((c) => c === -1) || tube.every((c) => c !== -1 && c === tube[0])
+  );
 }
-/* ------------------------------------ */
+/* -------------------------------- */
 
-/* ---------- визуал ---------- */
+/* ---------- цветовая карта ---------- */
 function getColorBlock(c, idx, tube) {
   const base =
     "w-full h-full mx-auto rounded-none transition-all duration-500 ease-in-out";
@@ -112,6 +57,7 @@ function getColorBlock(c, idx, tube) {
   };
   return `${base} ${map[c] || "bg-transparent"} ${rounded} opacity-90`;
 }
+/* ------------------------------------ */
 
 function Tube({ tube, index, onClick, selected }) {
   return (
@@ -134,94 +80,121 @@ function Tube({ tube, index, onClick, selected }) {
     </div>
   );
 }
-/* ------------------------------------ */
 
 export default function GamePage() {
   const navigate = useNavigate();
   const { state: navState } = useLocation();
   const [userId] = useState(navState?.userId || 1);
 
-  const [levelData, setLevelData] = useState(null);
+  const [levelId, setLevelId] = useState(null);
+  const [state, setState] = useState(null);
   const [coins, setCoins] = useState(0);
-  const [selectedTube, setSelectedTube] = useState(null);
-  const [showSolved, setShowSolved] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [showModal, setShowModal] = useState(false);
 
-  /* загрузка уровня и монет */
+  /* ---------- начальная загрузка ---------- */
   useEffect(() => {
     (async () => {
       const u = await api.get(`/users/${userId}`).catch(() => null);
       if (u) setCoins(u.data.coins);
 
-      const data = await fetchLevelDataForUser(userId);
-      if (data) setLevelData(data);
+      /* пробуем получить in‑progress */
+      let p;
+      try {
+        p = (await api.get(`/progress?userId=${userId}`)).data;
+      } catch (e) {
+        if (e.response?.status !== 404) console.error(e);
+      }
+
+      /* если нет — стартуем уровень 1 */
+      if (!p) {
+        const first = await api.get("/levels/1");
+        await api.post("/progress/start", {
+          userId,
+          levelId: 1,
+          state: first.data.level_data.state,
+        });
+        p = {
+          levelId: 1,
+          state: first.data.level_data.state,
+          status: "in_progress",
+        };
+      }
+
+      setLevelId(p.levelId);
+      setState(p.state);
     })();
   }, [userId]);
 
-  if (!levelData)
+  if (!state)
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
         Loading…
       </div>
     );
 
-  const solved = isSolved(levelData.state);
+  const solved = isSolved(state);
 
-  /* обработка клика по колбе */
-  const handleTubeClick = async (idx) => {
+  /* ---------- клик по Tube ---------- */
+  const clickTube = async (idx) => {
     if (solved) return;
-    const state = levelData.state;
-
-    if (selectedTube === null) {
-      if (state[idx][state[idx].length - 1] !== -1) setSelectedTube(idx);
+    if (selected === null) {
+      if (state[idx][state[idx].length - 1] !== -1) setSelected(idx);
       return;
     }
-    if (selectedTube === idx) {
-      setSelectedTube(null);
+    if (selected === idx) {
+      setSelected(null);
       return;
     }
-    if (!canPour(state[selectedTube], state[idx])) {
-      setSelectedTube(null);
+    if (!canPour(state[selected], state[idx])) {
+      setSelected(null);
       return;
     }
 
-    const { newSource, newTarget } = pour(state[selectedTube], state[idx]);
-    const newState = clone(state);
-    newState[selectedTube] = newSource;
-    newState[idx] = newTarget;
+    /* локальное оптимистичное обновление */
+    const { newSource, newTarget } = pour(state[selected], state[idx]);
+    const optimistic = clone(state);
+    optimistic[selected] = newSource;
+    optimistic[idx] = newTarget;
+    setState(optimistic);
+    const from = selected;
+    const to = idx;
+    setSelected(null);
 
-    const completed = isSolved(newState);
-    setLevelData({ ...levelData, state: newState });
-    await saveProgress(userId, levelData.Level_id, newState, completed);
-
-    if (completed) {
-      setShowSolved(true);
-      await setNextLevelAsInProgress(userId, levelData.Level_id + 1);
+    /* отправляем ход серверу */
+    try {
+      const resp = await api.post("/progress/move", {
+        userId,
+        levelId,
+        from,
+        to,
+      });
+      setState(resp.data.state);
+      if (resp.data.status === "completed") {
+        setShowModal(true);
+      }
+    } catch (e) {
+      console.error("move error:", e?.response?.data || e);
+      setState(state); // откат
     }
-    setSelectedTube(null);
   };
 
-  /* reset */
+  /* ---------- Reset ---------- */
   const resetLevel = async () => {
-    const { data } = await api.get(`/levels/${levelData.Level_id}`);
-    await api.post("/progress", {
-      user_id: userId,
-      level_id: data.id,
-      progress_data: { state: data.level_data.state },
-      completed: false,
-    });
-    setLevelData({
-      Level_id: data.id,
+    const { data } = await api.get(`/levels/${levelId}`);
+    await api.post("/progress/start", {
+      userId,
+      levelId,
       state: data.level_data.state,
-      completed: false,
     });
-    setSelectedTube(null);
+    setState(data.level_data.state);
+    setSelected(null);
   };
-
-  /* разбиение на ряды */
-  const topRow = levelData.state.slice(0, 4);
-  const bottomRow = levelData.state.slice(4);
 
   /* ---------- UI ---------- */
+  const topRow = state.slice(0, 4);
+  const bottomRow = state.slice(4);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6">
       <div className="w-[390px] h-[844px] bg-gray-900 rounded-3xl shadow-xl flex flex-col text-white relative overflow-hidden">
@@ -241,9 +214,7 @@ export default function GamePage() {
 
         {/* field */}
         <div className="flex flex-col flex-grow px-4 py-4 items-center">
-          <div className="text-sm text-gray-400 mb-2">
-            Level {levelData.Level_id}
-          </div>
+          <div className="text-sm text-gray-400 mb-2">Level {levelId}</div>
           <h2 className="text-xl font-bold mb-4">
             {solved ? "Level Solved!" : "Keep playing..."}
           </h2>
@@ -255,8 +226,8 @@ export default function GamePage() {
                   key={i}
                   tube={tube}
                   index={i}
-                  onClick={handleTubeClick}
-                  selected={selectedTube === i}
+                  onClick={clickTube}
+                  selected={selected === i}
                 />
               ))}
             </div>
@@ -267,8 +238,8 @@ export default function GamePage() {
                     key={i + 4}
                     tube={tube}
                     index={i + 4}
-                    onClick={handleTubeClick}
-                    selected={selectedTube === i + 4}
+                    onClick={clickTube}
+                    selected={selected === i + 4}
                   />
                 ))}
               </div>
@@ -283,8 +254,8 @@ export default function GamePage() {
           </button>
         </div>
 
-        {/* solved modal */}
-        {showSolved && (
+        {/* modal */}
+        {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
               <h3 className="text-lg font-bold mb-4">Уровень пройден!</h3>
@@ -305,19 +276,6 @@ export default function GamePage() {
             </div>
           </div>
         )}
-
-        {/* footer */}
-        <div className="absolute bottom-3 w-full text-center">
-          <button
-            onClick={async () => {
-              await navigator.clipboard.writeText("@SortWaterAI");
-              alert("Текст скопирован!");
-            }}
-            className="text-xs text-gray-500 underline"
-          >
-            @SortWaterAI
-          </button>
-        </div>
       </div>
     </div>
   );
