@@ -31,7 +31,7 @@ export default async function verifyTelegramInit(req, res, next) {
   const calcSignature = crypto
     .createHmac("sha256", secret)
     .update(dataCheck)
-    .digest("base64url"); // <--- ВАЖНО
+    .digest("base64"); // <--- ВАЖНО: НЕ base64url
 
   console.log(">>> clientSignature:", signature);
   console.log(">>> calcSignature:  ", calcSignature);
