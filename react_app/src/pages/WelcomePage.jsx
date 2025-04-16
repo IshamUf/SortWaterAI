@@ -33,7 +33,9 @@ export default function WelcomePage() {
       ) {
         const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
         tgUserId = tgUser.id;
-        tgUsername = tgUser.first_name + (tgUser.last_name ? " " + tgUser.last_name : "");
+        tgUsername =
+          tgUser.first_name +
+          (tgUser.last_name ? " " + tgUser.last_name : "");
         window.Telegram.WebApp.expand();
       }
       if (!tgUserId) {
@@ -43,7 +45,7 @@ export default function WelcomePage() {
       try {
         const userResp = await api.post("/users/orCreate", {
           telegram_id: tgUserId.toString(),
-          username: tgUsername
+          username: tgUsername,
         });
         const userData = userResp.data;
         setUserId(userData.id);
@@ -183,7 +185,7 @@ export default function WelcomePage() {
         style={{
           top: `${Math.random() * 80 + 10}%`,
           left: `${Math.random() * 80 + 10}%`,
-          transform: `translate(-50%, -50%) rotate(${Math.random() * 360}deg)`
+          transform: `translate(-50%, -50%) rotate(${Math.random() * 360}deg)`,
         }}
       >
         🤡
@@ -204,8 +206,12 @@ export default function WelcomePage() {
               {username ? username[0].toUpperCase() : "?"}
             </div>
             <div>
-              <div className="font-semibold text-sm break-words w-32">{username || "Loading..."}</div>
-              <div className="text-yellow-300 text-xs flex items-center">🏆 {currentLevel}</div>
+              <div className="font-semibold text-sm break-words w-32">
+                {username || "Loading..."}
+              </div>
+              <div className="text-yellow-300 text-xs flex items-center">
+                🏆 {currentLevel}
+              </div>
             </div>
           </div>
           <div className="bg-gray-700 px-3 py-1.5 rounded-full flex items-center space-x-1 text-sm">
@@ -232,14 +238,21 @@ export default function WelcomePage() {
               </button>
               <div className="mt-1 font-semibold text-xs">FREE DAILY GIFT</div>
             </div>
-            <div className="flex flex-col items-center text-sm cursor-pointer" onClick={openLeadersModal}>
-              <div className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl">📊</div>
+            <div
+              className="flex flex-col items-center text-sm cursor-pointer"
+              onClick={openLeadersModal}
+            >
+              <div className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl">
+                📊
+              </div>
               <div className="mt-1 font-semibold text-xs">LEADERS</div>
             </div>
           </div>
 
           <div className="bg-gray-800 bg-opacity-60 rounded-2xl p-6 w-full max-w-xs flex flex-col items-center">
-            <div className="text-center text-sm text-gray-400 mb-2">Level {currentLevel}</div>
+            <div className="text-center text-sm text-gray-400 mb-2">
+              Level {currentLevel}
+            </div>
             <button
               className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl font-bold text-xl shadow-md hover:scale-105 transition"
               onClick={navigateToGame}
@@ -253,38 +266,51 @@ export default function WelcomePage() {
       {showLeadersModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
           <div className="bg-gray-800 rounded-xl p-4 w-4/5 max-w-sm relative">
-            <button onClick={closeLeadersModal} className="absolute top-2 right-2 text-white text-2xl font-bold">&times;</button>
+            <button
+              onClick={closeLeadersModal}
+              className="absolute top-2 right-2 text-white text-2xl font-bold"
+            >
+              &times;
+            </button>
             <h3 className="text-lg font-bold mb-4 text-center">Leaderboard</h3>
-            <table className="w-full text-left text-sm text-gray-200">
-              <thead>
-                <tr>
-                  <th className="pb-2">#</th>
-                  <th className="pb-2">Username</th>
-                  <th className="pb-2">Completed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {leaderboardData.length > 0 ? (
-                  leaderboardData.map((entry, index) => (
-                    <tr key={index} className="border-t border-gray-700">
-                      <td className="py-1">{index + 1}</td>
-                      <td className="py-1">{entry.username}</td>
-                      <td className="py-1">{entry.completedLevels}</td>
-                    </tr>
-                  ))
-                ) : (
+
+            {/* Контейнер, внутри которого будет прокрутка */}
+            <div className="max-h-64 overflow-y-auto">
+              <table className="w-full text-left text-sm text-gray-200">
+                <thead>
                   <tr>
-                    <td colSpan="3" className="py-2 text-center">No data available.</td>
+                    <th className="pb-2">#</th>
+                    <th className="pb-2">Username</th>
+                    <th className="pb-2">Completed</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {leaderboardData.length > 0 ? (
+                    leaderboardData.map((entry, index) => (
+                      <tr key={index} className="border-t border-gray-700">
+                        <td className="py-1">{index + 1}</td>
+                        <td className="py-1">{entry.username}</td>
+                        <td className="py-1">{entry.completedLevels}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="3" className="py-2 text-center">
+                        No data available.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
       {showClowns && (
-        <div className="absolute inset-0 pointer-events-none z-40">{renderClowns()}</div>
+        <div className="absolute inset-0 pointer-events-none z-40">
+          {renderClowns()}
+        </div>
       )}
     </div>
   );
