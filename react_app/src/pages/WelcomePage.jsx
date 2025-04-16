@@ -3,117 +3,100 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
 
-const DAILY_COOLDOWN_MS   = 5 * 60 * 1000;
-const LOCALSTORAGE_KEY    = "dailyGiftUnlockTime";
-const WEBAPP_QUERY_PREFIX = (() => {
-  // rawInitData — это та самая строка "tgWebAppData=...&hash=...&user=..."
-  const raw = window.Telegram?.WebApp?.initData
-           || new URLSearchParams(window.location.search).get("tgWebAppData") && window.location.search.slice(1)
-           || "";
-  return raw ? `?${raw}` : "";
-})();
+const DAILY_COOLDOWN_MS = 5 * 60 * 1000;
+const LS_KEY = "dailyGiftUnlockTime";
 
 export default function WelcomePage() {
-  const navigate            = useNavigate();
-  const [userId, setUserId] = useState(null);
-  const [username, setUsername]   = useState("");
-  const [coins, setCoins]         = useState(0);
+  const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [coins, setCoins] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
-  const [totalLevels, setTotalLevels]   = useState(0);
+  const [totalLevels, setTotalLevels] = useState(0);
   const [giftDisabled, setGiftDisabled] = useState(true);
-  const [leaders, setLeaders]           = useState([]);
+  const [leaders, setLeaders] = useState([]);
   const [showLeadersModal, setShowLeadersModal] = useState(false);
 
-  const audioRef  = useRef(null);
+  const audioRef = useRef(null);
   const idleTimer = useRef(null);
-  const timeoutMs = 30 * 60 * 1000;
+  const TIMEOUT_MS = 30 * 60 * 1000;
 
   useEffect(() => {
+    // инициализация данных пользователя и прогресса
     (async () => {
-      // --- 1) Получаем или создаём пользователя ---
       try {
-        const { data: me } = await api.post(
-          `/users/orCreate${WEBAPP_QUERY_PREFIX}`,
-          {
-            telegram_id: window.Telegram?.WebApp?.initDataUnsafe?.user?.id.toString() || "123456",
-            username:    window.Telegram?.WebApp?.initDataUnsafe?.user?.username
-                           || "Guest",
-          }
-        );
-        setUserId(me.id);
+        // 1) Получаем текущего пользователя
+        const { data: me } = await api.get("/users/me");
         setUsername(me.username);
         setCoins(me.coins);
       } catch (e) {
-        console.error("Ошибка при orCreate:", e);
-        return;
+        console.error("Ошибка при получении пользователя:", e);
       }
 
-      // --- 2) Получаем прогресс ---
       try {
-        const { data: p } = await api.get(
-          `/progress${WEBAPP_QUERY_PREFIX}`,
-          { params: { userId } }
-        );
-        setCurrentLevel(p.levelId);
+        // 2) Текущий прогресс
+        const { data: prog } = await api.get("/progress");
+        setCurrentLevel(prog.levelId);
       } catch {
         setCurrentLevel(1);
       }
 
-      // --- 3) Общее число уровней ---
       try {
-        const { data } = await api.get(`/levels/count${WEBAPP_QUERY_PREFIX}`);
-        setTotalLevels(data.count);
-      } catch {
+        // 3) Общее число уровней
+        const { data } = await api.get("/levels/count");
+        setTotalLevels(data.count || 0);
+      } catch (e) {
+        console.error("Ошибка при получении количества уровней:", e);
         setTotalLevels(0);
       }
 
-      // --- 4) Запускаем таймер на подарки ---
-      checkCooldown();
+      startCooldownChecker();
     })();
-  //eslint-disable-next-line
-  }, [userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  function checkCooldown() {
-    const ts = +localStorage.getItem(LOCALSTORAGE_KEY) || 0;
-    if (Date.now() < ts) {
+  // проверка локального таймера на получение подарка
+  function startCooldownChecker() {
+    const unlockAt = +localStorage.getItem(LS_KEY) || 0;
+    if (Date.now() < unlockAt) {
       setGiftDisabled(true);
-      setTimeout(checkCooldown, ts - Date.now());
+      setTimeout(startCooldownChecker, unlockAt - Date.now());
     } else {
       setGiftDisabled(false);
-      localStorage.removeItem(LOCALSTORAGE_KEY);
+      localStorage.removeItem(LS_KEY);
     }
   }
 
-  const claimGift = async () => {
+  // клик «получить подарок»
+  async function claimGift() {
     try {
-      const { data } = await api.post(
-        `/users/me/daily${WEBAPP_QUERY_PREFIX}`
-      );
+      const { data } = await api.post("/users/me/daily");
       setCoins(data.coins);
-      localStorage.setItem(LOCALSTORAGE_KEY, Date.now() + DAILY_COOLDOWN_MS);
+      localStorage.setItem(LS_KEY, Date.now() + DAILY_COOLDOWN_MS);
       setGiftDisabled(true);
-      setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
+      setTimeout(startCooldownChecker, DAILY_COOLDOWN_MS);
     } catch (e) {
       if (e.response?.status === 429) {
-        setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
+        // ещё не истёк таймаут
+        setTimeout(startCooldownChecker, DAILY_COOLDOWN_MS);
       } else {
         console.error("Ошибка при получении подарка:", e);
       }
     }
-  };
+  }
 
-  const openLeaders = async () => {
+  // открываем модалку лидеров
+  async function openLeaders() {
     try {
-      const { data } = await api.get(`/leaderboard${WEBAPP_QUERY_PREFIX}`);
+      const { data } = await api.get("/leaderboard");
       setLeaders(data);
       setShowLeadersModal(true);
     } catch (e) {
       console.error("Ошибка при загрузке лидеров:", e);
     }
-  };
+  }
 
-  // **Easter‑egg** при простое
-  const triggerEgg = () => {
+  // пасхалка по бездействию
+  function triggerEgg() {
     if (!audioRef.current) {
       audioRef.current = new Audio("/background.mp3");
       audioRef.current.loop = true;
@@ -122,14 +105,14 @@ export default function WelcomePage() {
     idleTimer.current = setTimeout(() => {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
-    }, 60_000);
-  };
-  const resetIdle = () => {
+    }, 60000);
+  }
+  function resetIdle() {
     clearTimeout(idleTimer.current);
     audioRef.current?.pause();
     if (audioRef.current) audioRef.current.currentTime = 0;
-    idleTimer.current = setTimeout(triggerEgg, timeoutMs);
-  };
+    idleTimer.current = setTimeout(triggerEgg, TIMEOUT_MS);
+  }
   useEffect(() => {
     window.addEventListener("click", resetIdle);
     resetIdle();
@@ -145,7 +128,7 @@ export default function WelcomePage() {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center font-bold">
+            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-sm font-bold">
               {username[0]?.toUpperCase() || "?"}
             </div>
             <div>
@@ -161,7 +144,7 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* Main */}
+        {/* Content */}
         <div className="flex flex-col items-center justify-center flex-grow gap-6">
           <h1 className="text-3xl font-extrabold">SortWaterAI</h1>
           <div className="flex space-x-8">
@@ -169,9 +152,7 @@ export default function WelcomePage() {
               onClick={claimGift}
               disabled={giftDisabled}
               className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl ${
-                giftDisabled
-                  ? "bg-gray-600 opacity-60 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-500 active:scale-95"
+                giftDisabled ? "bg-gray-600 opacity-60" : "bg-green-600 hover:bg-green-500"
               }`}
             >
               🎁
@@ -183,15 +164,15 @@ export default function WelcomePage() {
               📊
             </button>
           </div>
+
+          {/* Level Panel */}
           <div className="bg-gray-800 bg-opacity-60 rounded-2xl p-6 w-full max-w-xs flex flex-col items-center">
             <div className="text-gray-400 text-sm mb-2">
-              {totalLevels
-                ? `Level ${currentLevel}/${totalLevels}`
-                : `Level ${currentLevel}`}
+              {totalLevels ? `Level ${currentLevel}/${totalLevels}` : `Level ${currentLevel}`}
             </div>
             <button
-              onClick={() => navigate("/game", { state: { userId } })}
-              className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl font-bold text-xl shadow-md hover:scale-105 transition"
+              onClick={() => navigate("/game")}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
             >
               PLAY
             </button>
@@ -205,30 +186,29 @@ export default function WelcomePage() {
           <div className="bg-gray-800 rounded-xl p-4 w-4/5 max-w-sm relative">
             <button
               onClick={() => setShowLeadersModal(false)}
-              className="absolute top-2 right-2 text-white text-2xl font-bold"
+              className="absolute top-2 right-2 text-white text-2xl"
             >
-              ×
+              &times;
             </button>
             <h3 className="text-lg font-bold mb-4 text-center">Leaderboard</h3>
             <div className="max-h-64 overflow-y-auto">
               <table className="w-full text-left text-sm text-gray-200">
                 <thead>
                   <tr>
-                    <th className="pb-2">#</th>
-                    <th className="pb-2">User</th>
-                    <th className="pb-2">Done</th>
+                    <th>#</th>
+                    <th>User</th>
+                    <th>Done</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {leaders.length ? (
-                    leaders.map((e, i) => (
-                      <tr key={i} className="border-t border-gray-700">
-                        <td className="py-1">{i + 1}</td>
-                        <td className="py-1">{e.username}</td>
-                        <td className="py-1">{e.completedLevels}</td>
-                      </tr>
-                    ))
-                  ) : (
+                  {leaders.map((e, i) => (
+                    <tr key={i} className="border-t border-gray-700">
+                      <td className="py-1">{i + 1}</td>
+                      <td className="py-1">{e.username}</td>
+                      <td className="py-1">{e.completedLevels}</td>
+                    </tr>
+                  ))}
+                  {leaders.length === 0 && (
                     <tr>
                       <td colSpan="3" className="py-2 text-center">
                         No data
@@ -242,5 +222,5 @@ export default function WelcomePage() {
         </div>
       )}
     </div>
-);
+  );
 }
