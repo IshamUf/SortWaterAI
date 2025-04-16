@@ -1,9 +1,14 @@
+// backend/routes/levels.mjs
 import express from "express";
-import { getLevelById } from "../controllers/levelController.mjs";
+import {
+  getLevelById,
+  getLevelsCount,
+} from "../controllers/levelController.mjs";
 
 const router = express.Router();
 
-// Получить уровень по ID
-router.get("/:id", getLevelById);
+// Сначала «специальные» роуты, потом параметрические
+router.get("/count", getLevelsCount); // /levels/count
+router.get("/:id", getLevelById);     // /levels/:id
 
 export default router;
