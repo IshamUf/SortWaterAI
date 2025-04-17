@@ -1,4 +1,3 @@
-// src/pages/WelcomePage.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
@@ -18,14 +17,14 @@ export default function WelcomePage() {
   const [leaders, setLeaders] = useState([]);
   const [showLeadersModal, setShowLeadersModal] = useState(false);
 
-  // для «пасхалки»
+  // пасхалка
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
   const TIMEOUT_MS = 30 * 60 * 1000;
 
   useEffect(() => {
     (async () => {
-      // 1) получаем текущего пользователя (и создаём его в БД по middleware)
+      // 1) GET /users/me
       try {
         const { data: user } = await api.get("/users/me");
         setUsername(user.username);
@@ -34,16 +33,15 @@ export default function WelcomePage() {
         console.error("Ошибка при GET /users/me:", e);
       }
 
-      // 2) получаем прогресс
+      // 2) GET /progress
       try {
         const { data: prog } = await api.get("/progress");
         setCurrentLevel(prog.levelId);
-      } catch (e) {
-        // если 404 или 401 — оставляем 1
+      } catch {
         setCurrentLevel(1);
       }
 
-      // 3) получаем общее число уровней
+      // 3) GET /levels/count
       try {
         const { data } = await api.get("/levels/count");
         setTotalLevels(data.count);
@@ -51,7 +49,7 @@ export default function WelcomePage() {
         console.error("Ошибка при GET /levels/count:", e);
       }
 
-      // 4) проверяем локальный cooldown
+      // 4) cooldown
       checkCooldown();
     })();
   }, []);
@@ -76,7 +74,6 @@ export default function WelcomePage() {
       setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
     } catch (e) {
       if (e.response?.status === 429) {
-        // просто ждём
         setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
       } else {
         console.error("Ошибка при POST /users/me/daily:", e);
@@ -94,7 +91,6 @@ export default function WelcomePage() {
     }
   }
 
-  // пасхалка по бездействию
   function triggerEgg() {
     if (!audioRef.current) {
       audioRef.current = new Audio("/background.mp3");
@@ -124,7 +120,7 @@ export default function WelcomePage() {
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6 overflow-hidden">
       <div className="max-w-lg w-full mx-auto flex flex-col h-full">
-        {/* — Header */}
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center font-bold">
@@ -143,7 +139,7 @@ export default function WelcomePage() {
           </div>
         </div>
 
-        {/* — Main content */}
+        {/* Main */}
         <div className="flex flex-col items-center justify-center flex-grow gap-6">
           <h1 className="text-3xl font-extrabold">SortWaterAI</h1>
           <div className="flex space-x-8">
@@ -166,7 +162,7 @@ export default function WelcomePage() {
             </button>
           </div>
 
-          {/* — Level panel */}
+          {/* Level panel */}
           <div className="bg-gray-800 bg-opacity-60 rounded-2xl p-6 w-full max-w-xs flex flex-col items-center">
             <div className="text-gray-400 text-sm mb-2">
               {totalLevels
@@ -174,7 +170,7 @@ export default function WelcomePage() {
                 : `Level ${currentLevel}`}
             </div>
             <button
-              onClick={() => navigate("/game", { state: { /* можно передать userId */ } })}
+              onClick={() => navigate("/game")}
               className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
             >
               PLAY
@@ -183,7 +179,7 @@ export default function WelcomePage() {
         </div>
       </div>
 
-      {/* — Leaders Modal */}
+      {/* Leaders Modal */}
       {showLeadersModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
           <div className="bg-gray-800 rounded-xl p-4 w-4/5 max-w-sm relative">
@@ -204,16 +200,19 @@ export default function WelcomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {leaders.map((e, i) => (
-                    <tr key={i} className="border-t border-gray-700">
-                      <td className="py-1">{i + 1}</td>
-                      <td className="py-1">{e.username}</td>
-                      <td className="py-1">{e.completedLevels}</td>
-                    </tr>
-                  ))}
-                  {leaders.length === 0 && (
+                  {leaders.length > 0 ? (
+                    leaders.map((e, i) => (
+                      <tr key={i} className="border-t border-gray-700">
+                        <td className="py-1">{i + 1}</td>
+                        <td className="py-1">{e.username}</td>
+                        <td className="py-1">{e.completedLevels}</td>
+                      </tr>
+                    ))
+                  ) : (
                     <tr>
-                      <td colSpan="3" className="py-2 text-center">No data</td>
+                      <td colSpan="3" className="py-2 text-center">
+                        No data
+                      </td>
                     </tr>
                   )}
                 </tbody>

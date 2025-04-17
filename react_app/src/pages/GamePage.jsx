@@ -1,4 +1,3 @@
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "../api/api";
@@ -7,18 +6,27 @@ import api from "../api/api";
 const findTop = (tube) => tube.findIndex((c) => c !== -1);
 const cloneState = (s) => s.map((t) => [...t]);
 const canPour = (A, B) => {
-  const f = findTop(A); if (f === -1) return false;
-  const t = findTop(B); if (t === 0) return false;
+  const f = findTop(A);
+  if (f === -1) return false;
+  const t = findTop(B);
+  if (t === 0) return false;
   return t === -1 || A[f] === B[t];
 };
 const pour = (A0, B0) => {
-  const A = [...A0], B = [...B0];
-  let f = findTop(A), col = A[f];
+  const A = [...A0],
+    B = [...B0];
+  let f = findTop(A),
+    col = A[f];
   let cnt = 1;
-  for (let i = f+1; i < A.length && A[i] === col; i++) cnt++;
-  let t = findTop(B); t = t === -1 ? B.length - 1 : t - 1;
+  for (let i = f + 1; i < A.length && A[i] === col; i++) cnt++;
+  let t = findTop(B);
+  t = t === -1 ? B.length - 1 : t - 1;
   while (cnt > 0 && t >= 0 && B[t] === -1) {
-    B[t] = col; A[f] = -1; f++; t--; cnt--;
+    B[t] = col;
+    A[f] = -1;
+    f++;
+    t--;
+    cnt--;
   }
   return { newA: A, newB: B };
 };
@@ -58,7 +66,9 @@ function Tube({ tube, idx, onClick, selected }) {
                     "#BFCBA8",
                   ][c],
             borderRadius:
-              i === tube.length - 1 || tube[i + 1] === -1 ? "0 0 9999px 9999px" : 0,
+              i === tube.length - 1 || tube[i + 1] === -1
+                ? "0 0 9999px 9999px"
+                : 0,
           }}
         />
       ))}
@@ -68,47 +78,43 @@ function Tube({ tube, idx, onClick, selected }) {
 
 export default function GamePage() {
   const navigate = useNavigate();
-  const { state: navState } = useLocation();
-  const [userId] = useState(navState?.userId || 1);
-
+  const location = useLocation();
+  const [coins, setCoins] = useState(0);
   const [levelId, setLevelId] = useState(null);
   const [tubes, setTubes] = useState(null);
-  const [coins, setCoins] = useState(0);
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     (async () => {
-      // get self coins
+      // 1) coins
       try {
-        const { data: me } = await api.get(`/users/${userId}`);
+        const { data: me } = await api.get("/users/me");
         setCoins(me.coins);
       } catch {}
 
-      // get progress
+      // 2) прогресс
       let prog;
       try {
-        prog = (await api.get(`/progress?userId=${userId}`)).data;
-      } catch {
-        prog = null;
-      }
-
-      // if none, start level 1
-      if (!prog) {
-        const lvl1 = (await api.get("/levels/1")).data;
-        await api.post("/progress", {
-          user_id: userId,
-          level_id: 1,
-          progress_data: { state: lvl1.level_data.state },
-          completed: false,
-        });
-        prog = { levelId: 1, state: lvl1.level_data.state };
+        prog = (await api.get("/progress")).data;
+      } catch (e) {
+        if (e.response?.status === 404) {
+          // первый запуск
+          const lvl1 = (await api.get("/levels/1")).data;
+          await api.post("/progress/start", {
+            levelId: 1,
+            state: lvl1.level_data.state,
+          });
+          prog = { levelId: 1, state: lvl1.level_data.state };
+        } else {
+          console.error("Ошибка GET /progress:", e);
+        }
       }
 
       setLevelId(prog.levelId);
       setTubes(prog.state);
     })();
-  }, [userId]);
+  }, []);
 
   if (!tubes) {
     return (
@@ -120,49 +126,51 @@ export default function GamePage() {
 
   const solved = isSolved(tubes);
 
-  const handleClick = async (i) => {
+  const handleClick = async (idx) => {
     if (solved) return;
     if (selected === null) {
-      if (tubes[i][tubes[i].length - 1] !== -1) setSelected(i);
+      if (tubes[idx][tubes[idx].length - 1] !== -1) setSelected(idx);
       return;
     }
-    if (selected === i) {
+    if (selected === idx) {
       setSelected(null);
       return;
     }
-    if (!canPour(tubes[selected], tubes[i])) {
+    if (!canPour(tubes[selected], tubes[idx])) {
       setSelected(null);
       return;
     }
 
-    // optimistic update
-    const { newA, newB } = pour(tubes[selected], tubes[i]);
+    // optimistic
+    const { newA, newB } = pour(tubes[selected], tubes[idx]);
     const next = cloneState(tubes);
     next[selected] = newA;
-    next[i] = newB;
+    next[idx] = newB;
     setTubes(next);
     setSelected(null);
 
-    // send move
+    // POST move
     try {
-      const { data } = await api.post("/progress", {
-        user_id: userId,
-        level_id: levelId,
-        progress_data: { state: next },
-        completed: isSolved(next),
+      const { data } = await api.post("/progress/move", {
+        levelId,
+        from: selected,
+        to: idx,
       });
       setTubes(data.state);
-      if (data.status === "completed") setShowModal(true);
-    } catch {}
+      if (data.status === "completed") {
+        setShowModal(true);
+      }
+    } catch (e) {
+      console.error("Ошибка POST /progress/move:", e);
+      setTubes(tubes); // rollback
+    }
   };
 
   const resetLevel = async () => {
     const lvl = (await api.get(`/levels/${levelId}`)).data;
-    await api.post("/progress", {
-      user_id: userId,
-      level_id: levelId,
-      progress_data: { state: lvl.level_data.state },
-      completed: false,
+    await api.post("/progress/start", {
+      levelId,
+      state: lvl.level_data.state,
     });
     setTubes(lvl.level_data.state);
     setSelected(null);
@@ -234,5 +242,5 @@ export default function GamePage() {
         </div>
       )}
     </div>
-  );
+);
 }
