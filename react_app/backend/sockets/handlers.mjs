@@ -73,15 +73,27 @@ export default function registerHandlers(socket) {
     });
   });
 
-  socket.on("progress:start", async ({ levelId, state }, ack) => {
-    const [p] = await Progress.findOrCreate({
-      where: { userId: socket.user.id, levelId },
-      defaults: { state, status: "in_progress" },
-    });
-    p.state = state;
-    p.status = "in_progress";
-    await p.save();
-    ack({ levelId: p.levelId, state: p.state, status: p.status });
+  socket.on("progress:start", async ({ levelId }, ack) => {
+    try {
+      /* грузим оригинальный state из Levels */
+      const lvl = await Level.findByPk(levelId);
+      if (!lvl) return ack({ error: "level_not_found" });
+      const originalState = JSON.parse(lvl.level_data).state;
+
+      /* создаём / перезаписываем Progress */
+      const [p] = await Progress.findOrCreate({
+        where: { userId: socket.user.id, levelId },
+        defaults: { state: originalState, status: "in_progress" },
+      });
+      p.state  = originalState;
+      p.status = "in_progress";
+      await p.save();
+
+      ack({ levelId: p.levelId, state: p.state, status: p.status });
+    } catch (err) {
+      console.error("progress:start:", err);
+      ack({ error: "internal" });
+    }
   });
 
   socket.on("progress:move", async ({ levelId, from, to }, ack) => {

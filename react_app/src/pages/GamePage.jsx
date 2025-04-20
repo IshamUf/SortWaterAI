@@ -104,8 +104,7 @@ export default function GamePage() {
       if (prog.error) prog = null;
 
       if (!prog) {
-        const first = await wsLevelGet(1);
-        prog = await wsStart({ levelId: 1, state: first.state });
+        prog = await wsStart({ levelId: 1 });
       }
 
       setLevelId(prog.levelId);
@@ -159,8 +158,7 @@ export default function GamePage() {
 
   /* ---------- сброс уровня ---------- */
   const resetLevel = async () => {
-    const first = await wsLevelGet(levelId);
-    const resp = await wsStart({ levelId, state: first.state });
+    const resp = await wsStart({ levelId });
     setState(resp.state);
     setSelected(null);
   };
