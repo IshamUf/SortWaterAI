@@ -4,8 +4,8 @@ WORKDIR /app
 
 # зависимости фронтенда
 COPY package*.json ./
-RUN npm ci --omit=dev \
- && npm audit signatures           # проверяем уязвимости
+RUN npm ci \
+ && npm audit signatures
 
 # исходники + билд
 COPY . .
