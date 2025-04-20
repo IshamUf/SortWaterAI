@@ -1,16 +1,19 @@
 // backend/sockets/rateLimit.mjs
-const WINDOW = 5_000; // 10 сек
-const MAX = 40;
+const WINDOW = 5_000; // 10 секунд
+const MAX = 40;        // не более 40 событий за окно
 
 export default function rateLimit(socket, next) {
   let calls = 0;
+
+  /* обнуляем счётчик каждые WINDOW мс */
   const timer = setInterval(() => (calls = 0), WINDOW);
   socket.on("disconnect", () => clearInterval(timer));
 
-  socket.use((_, __, fn) => {
-    if (++calls > MAX) return fn(new Error("rate_limit"));
-    fn();
+  /* middleware для каждого входящего события */
+  socket.use((packet, nextPacket) => {
+    if (++calls > MAX) return nextPacket(new Error("rate_limit"));
+    nextPacket();
   });
 
-  next();
+  next(); // пропускаем handshake дальше
 }
