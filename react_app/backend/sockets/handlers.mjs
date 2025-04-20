@@ -1,4 +1,3 @@
-// backend/sockets/handlers.mjs
 import Progress from "../models/Progress.mjs";
 import Level    from "../models/Level.mjs";
 import User     from "../models/User.mjs";
@@ -7,18 +6,15 @@ import { fn, col, literal } from "sequelize";
 
 export default function registerHandlers(socket) {
   /* ---------- User ---------- */
-  socket.on("user:get", (_ignored, ack) => {
+  socket.on("user:get", (_i, ack) => {
     const u = socket.user;
     ack({ id: u.id, username: u.username, coins: u.coins });
   });
 
-  socket.on("user:daily", async (_ignored, ack) => {
+  socket.on("user:daily", async (_i, ack) => {
     const cooldownMs = 5 * 60 * 1000;
-    const now = Date.now();
-    const last = socket.user.last_daily_reward
-      ? +socket.user.last_daily_reward
-      : 0;
-
+    const now  = Date.now();
+    const last = socket.user.last_daily_reward ? +socket.user.last_daily_reward : 0;
     if (now - last < cooldownMs)
       return ack({ error: "cooldown", next: last + cooldownMs });
 
@@ -29,9 +25,7 @@ export default function registerHandlers(socket) {
   });
 
   /* ---------- Levels ---------- */
-  socket.on("levels:count", (_ignored, ack) => {
-    Level.count().then((count) => ack({ count }));
-  });
+  socket.on("levels:count", (_i, ack) => Level.count().then((c) => ack({ count: c })));
 
   socket.on("levels:get", async (id, ack) => {
     const lvl = await Level.findByPk(id);
@@ -44,7 +38,7 @@ export default function registerHandlers(socket) {
   });
 
   /* ---------- Leaderboard ---------- */
-  socket.on("leaderboard:get", (_ignored, ack) => {
+  socket.on("leaderboard:get", (_i, ack) => {
     Progress.findAll({
       where: { status: "completed" },
       attributes: ["userId", [fn("COUNT", col("status")), "cnt"]],
@@ -53,75 +47,86 @@ export default function registerHandlers(socket) {
       include: [{ model: User, attributes: ["username"] }],
       raw: true,
     }).then((rows) =>
-      ack(
-        rows.map((r) => ({
-          username: r["User.username"],
-          completedLevels: r.cnt,
-        }))
-      )
+      ack(rows.map((r) => ({
+        username: r["User.username"],
+        completedLevels: r.cnt,
+      })))
     );
   });
 
   /* ---------- Progress ---------- */
-  socket.on("progress:get", (_ignored, ack) => {
+  socket.on("progress:get", (_i, ack) => {
     Progress.findOne({
       where: { userId: socket.user.id, status: "in_progress" },
       order: [["updatedAt", "DESC"]],
     }).then((p) => {
       if (!p) return ack({ error: "no_progress" });
-      ack({ levelId: p.levelId, state: p.state, status: p.status });
+      ack({
+        levelId: p.levelId,
+        state:   p.state,
+        status:  p.status,
+        moves:   p.moves,
+      });
     });
   });
 
+  /* --- Reset / Start --- */
   socket.on("progress:start", async ({ levelId }, ack) => {
     try {
-      /* грузим оригинальный state из Levels */
       const lvl = await Level.findByPk(levelId);
       if (!lvl) return ack({ error: "level_not_found" });
       const originalState = JSON.parse(lvl.level_data).state;
 
-      /* создаём / перезаписываем Progress */
       const [p] = await Progress.findOrCreate({
         where: { userId: socket.user.id, levelId },
-        defaults: { state: originalState, status: "in_progress" },
+        defaults: {
+          state: originalState,
+          status: "in_progress",
+          moves:  0,
+        },
       });
+
       p.state  = originalState;
       p.status = "in_progress";
+      p.moves  = 0;            // ← сброс счётчика
       await p.save();
 
-      ack({ levelId: p.levelId, state: p.state, status: p.status });
+      ack({
+        levelId: p.levelId,
+        state:   p.state,
+        status:  p.status,
+        moves:   p.moves,
+      });
     } catch (err) {
       console.error("progress:start:", err);
       ack({ error: "internal" });
     }
   });
 
+  /* --- Один ход --- */
   socket.on("progress:move", async ({ levelId, from, to }, ack) => {
     const p = await Progress.findOne({
       where: { userId: socket.user.id, levelId },
     });
-    if (!p) return ack({ error: "no_progress" });
+    if (!p)               return ack({ error: "no_progress" });
     if (p.status === "completed") return ack({ error: "completed" });
 
     const cur = p.state;
-    if (
-      from < 0 ||
-      from >= cur.length ||
-      to < 0 ||
-      to >= cur.length ||
-      !canPour(cur[from], cur[to])
-    )
+    if (from < 0 || from >= cur.length || to < 0 || to >= cur.length ||
+        !canPour(cur[from], cur[to]))
       return ack({ error: "illegal" });
 
     const { newSource, newTarget } = pour(cur[from], cur[to]);
     const next = [...cur];
     next[from] = newSource;
-    next[to] = newTarget;
+    next[to]   = newTarget;
 
-    p.state = next;
+    p.state  = next;
+    p.moves += 1;                               // ← +1 ход
     p.status = isSolved(next) ? "completed" : "in_progress";
     await p.save();
 
+    /* создаём следующий уровень */
     if (p.status === "completed") {
       const nextLevel = await Level.findByPk(levelId + 1);
       if (nextLevel) {
@@ -130,10 +135,11 @@ export default function registerHandlers(socket) {
           defaults: {
             state: JSON.parse(nextLevel.level_data).state,
             status: "in_progress",
+            moves:  0,
           },
         });
       }
     }
-    ack({ state: p.state, status: p.status });
+    ack({ state: p.state, status: p.status, moves: p.moves });
   });
 }
