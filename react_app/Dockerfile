@@ -1,23 +1,29 @@
-# --- Frontend Stage ---
+# --- Frontend Stage ----------------------------------------------------------
 FROM node:18 AS frontend
 WORKDIR /app
+
+# зависимости фронтенда
 COPY package*.json ./
-RUN npm install
+RUN npm ci --omit=dev \
+ && npm audit signatures           # проверяем уязвимости
+
+# исходники + билд
 COPY . .
 RUN npm run build
 
-# --- Backend Stage ---
+# --- Backend Stage -----------------------------------------------------------
 FROM node:18
 WORKDIR /app
 
-# Установка зависимостей бэкенда
+# зависимости бэкенда
 COPY backend/package*.json ./backend/
-RUN cd backend && npm install
+RUN cd backend \
+ && npm ci --omit=dev \
+ && npm audit signatures           # проверяем уязвимости
 
-# Копируем исходники backend + готовый frontend
+# копируем исходники backend и итоговый фронт
 COPY backend ./backend
 COPY --from=frontend /app/dist ./backend/public
 
-# Запуск
 WORKDIR /app/backend
 CMD ["node", "index.mjs"]
