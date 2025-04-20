@@ -1,7 +1,7 @@
 // backend/sockets/handlers.mjs
 import Progress from "../models/Progress.mjs";
-import Level from "../models/Level.mjs";
-import User from "../models/User.mjs";
+import Level    from "../models/Level.mjs";
+import User     from "../models/User.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 import { fn, col, literal } from "sequelize";
 

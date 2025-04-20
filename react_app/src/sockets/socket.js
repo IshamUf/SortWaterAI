@@ -1,21 +1,34 @@
 import { io } from "socket.io-client";
 
+const saved = sessionStorage.getItem("sw_token");
 const socket = io("/", {
   transports: ["websocket"],
-  auth: { initData: window?.Telegram?.WebApp?.initData },
+  auth: saved ? { token: saved } : { initData: window.Telegram?.WebApp?.initData },
 });
 
-const request = (event, payload) =>
-  new Promise((res) => socket.emit(event, payload, res));
+/* автоматическое сохранение токена */
+socket.on("auth:token", (t) => {
+  sessionStorage.setItem("sw_token", t);
+  socket.auth.token = t;
+});
 
-export const wsGetSelf     = ()           => request("user:get");
-export const wsClaimDaily  = ()           => request("user:daily");
-export const wsLevelsCount = ()           => request("levels:count");
-export const wsLevelGet    = (id)         => request("levels:get", id);
-export const wsLeaderboard = ()           => request("leaderboard:get");
+/* если срок вышел */
+socket.on("auth:expired", () => {
+  sessionStorage.removeItem("sw_token");
+  window.location.reload(); // перезапрос initData → новый токен
+});
 
-export const wsGetProgress = ()           => request("progress:get");
-export const wsStart       = (p)          => request("progress:start", p);
-export const wsMove        = (p)          => request("progress:move", p);
+/* helper для запросов с ack */
+const req = (event, data) => new Promise((res) => socket.emit(event, data, res));
+
+export const wsGetSelf     = ()         => req("user:get", null);
+export const wsClaimDaily  = ()         => req("user:daily", null);
+export const wsLevelsCount = ()         => req("levels:count", null);
+export const wsLevelGet    = (id)       => req("levels:get", id);
+export const wsLeaderboard = ()         => req("leaderboard:get", null);
+
+export const wsGetProgress = ()         => req("progress:get", null);
+export const wsStart       = (p)        => req("progress:start", p);
+export const wsMove        = (p)        => req("progress:move", p);
 
 export default socket;

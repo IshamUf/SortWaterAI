@@ -1,38 +1,43 @@
 // backend/sockets/verifyTelegramInitSocket.mjs
 import { validate, parse } from "@telegram-apps/init-data-node";
+import jwt from "jsonwebtoken";
 import User from "../models/User.mjs";
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-if (!BOT_TOKEN) throw new Error("Set TELEGRAM_BOT_TOKEN");
+const BOT_TOKEN  = process.env.TELEGRAM_BOT_TOKEN;
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_TTL    = process.env.JWT_TTL || "1h";
 
-export default async function verifySocketAuth(socket, next) {
+export default async function verifyInitData(socket, next) {
+  if (socket.user) return next(); // уже авторизован через token
+
+  const raw = socket.handshake.auth?.initData;
+  if (!raw) return next(new Error("no_initData"));
+
   try {
-    const raw =
-      socket.handshake.auth?.initData ||
-      socket.handshake.headers["x-tg-init-data"];
-    if (!raw) return next(new Error("No initData"));
-
-    // проверяем подпись Telegram
     validate(raw, BOT_TOKEN);
+    const data = parse(raw);
 
-    // парсим
-    const initData = parse(raw);
-
-    // ищем / создаём пользователя
     const [user] = await User.findOrCreate({
-      where: { telegram_id: String(initData.user.id) },
+      where: { telegram_id: String(data.user.id) },
       defaults: {
-        telegram_id: String(initData.user.id),
+        telegram_id: String(data.user.id),
         username:
-          initData.user.username ??
-          `${initData.user.first_name}_${initData.user.id}`,
+          data.user.username ?? `${data.user.first_name}_${data.user.id}`,
       },
     });
 
-    socket.user = user; // кладём в объект сокета
+    // генерируем JWT
+    const token = jwt.sign(
+      { sub: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: JWT_TTL }
+    );
+
+    socket.user = user;
+    socket.emit("auth:token", token);
     next();
   } catch (err) {
-    console.error("WS auth error:", err);
-    next(new Error("Auth failed"));
+    console.error("initData validation failed:", err);
+    next(new Error("init_invalid"));
   }
 }
