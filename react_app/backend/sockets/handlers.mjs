@@ -1,8 +1,9 @@
+// backend/sockets/handlers.mjs
 import Progress from "../models/Progress.mjs";
-import Level from "../models/Level.mjs";
+import Level    from "../models/Level.mjs";
+import User     from "../models/User.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
-import { Op, fn, col, literal } from "sequelize";
-import User from "../models/User.mjs";
+import { fn, col, literal } from "sequelize";
 
 export default function registerHandlers(socket) {
   /* ---------- User ---------- */
@@ -13,13 +14,9 @@ export default function registerHandlers(socket) {
 
   socket.on("user:daily", async (ack) => {
     const cooldownMs = 5 * 60 * 1000;
-    const now = Date.now();
-    const last = socket.user.last_daily_reward
-      ? +socket.user.last_daily_reward
-      : 0;
-
-    if (now - last < cooldownMs)
-      return ack({ error: "cooldown", next: last + cooldownMs });
+    const now  = Date.now();
+    const last = socket.user.last_daily_reward ? +socket.user.last_daily_reward : 0;
+    if (now - last < cooldownMs) return ack({ error: "cooldown", next: last + cooldownMs });
 
     socket.user.coins += 50;
     socket.user.last_daily_reward = new Date(now);
@@ -33,6 +30,21 @@ export default function registerHandlers(socket) {
     ack({ count });
   });
 
+  socket.on("levels:get", async (id, ack) => {
+    try {
+      const lvl = await Level.findByPk(id);
+      if (!lvl) return ack({ error: "not_found" });
+      ack({
+        id: lvl.id,
+        state: JSON.parse(lvl.level_data).state,
+        difficulty: lvl.difficulty,
+      });
+    } catch (err) {
+      console.error("levels:get", err);
+      ack({ error: "internal" });
+    }
+  });
+
   /* ---------- Leaderboard ---------- */
   socket.on("leaderboard:get", async (ack) => {
     const rows = await Progress.findAll({
@@ -43,14 +55,10 @@ export default function registerHandlers(socket) {
       include: [{ model: User, attributes: ["username"] }],
       raw: true,
     });
-    const board = rows.map((r) => ({
-      username: r["User.username"],
-      completedLevels: r.cnt,
-    }));
-    ack(board);
+    ack(rows.map((r) => ({ username: r["User.username"], completedLevels: r.cnt })));
   });
 
-  /* ---------- Progress (ранее) ---------- */
+  /* ---------- Progress ---------- */
   socket.on("progress:get", async (ack) => {
     const p = await Progress.findOne({
       where: { userId: socket.user.id, status: "in_progress" },
@@ -72,28 +80,23 @@ export default function registerHandlers(socket) {
   });
 
   socket.on("progress:move", async ({ levelId, from, to }, ack) => {
-    const p = await Progress.findOne({
-      where: { userId: socket.user.id, levelId },
-    });
+    const p = await Progress.findOne({ where: { userId: socket.user.id, levelId } });
     if (!p) return ack({ error: "no_progress" });
     if (p.status === "completed") return ack({ error: "completed" });
 
     const cur = p.state;
     if (
-      from < 0 ||
-      from >= cur.length ||
-      to < 0 ||
-      to >= cur.length ||
+      from < 0 || from >= cur.length ||
+      to   < 0 || to   >= cur.length ||
       !canPour(cur[from], cur[to])
-    )
-      return ack({ error: "illegal" });
+    ) return ack({ error: "illegal" });
 
     const { newSource, newTarget } = pour(cur[from], cur[to]);
     const next = [...cur];
     next[from] = newSource;
-    next[to] = newTarget;
+    next[to]   = newTarget;
 
-    p.state = next;
+    p.state  = next;
     p.status = isSolved(next) ? "completed" : "in_progress";
     await p.save();
 

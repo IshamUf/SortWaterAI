@@ -1,13 +1,16 @@
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api/api";
-import socket, { wsMove, wsGetProgress, wsStart } from "../sockets/socket";
+import {
+  wsGetSelf,
+  wsGetProgress,
+  wsLevelGet,
+  wsStart,
+  wsMove,
+} from "../sockets/socket";
 
-/* ---------- локальные утилиты ---------- */
+/* ---------- утилиты ---------- */
 const findTop = (tube) => tube.findIndex((c) => c !== -1);
 const deepClone = (s) => s.map((t) => [...t]);
-
 function canPour(src, dst) {
   const f = findTop(src);
   if (f === -1) return false;
@@ -38,7 +41,7 @@ const isSolved = (state) =>
     (tube) =>
       tube.every((c) => c === -1) || tube.every((c) => c !== -1 && c === tube[0])
   );
-/* -------------------------------------- */
+/* -------------------------------- */
 
 /* ---------- Tube UI ---------- */
 const colorMap = [
@@ -58,7 +61,6 @@ function getColorBlock(c, idx, tube) {
     idx === tube.length - 1 || tube[idx + 1] === -1 ? "rounded-b-full" : "";
   return `${base} ${colorMap[c] || "bg-transparent"} ${rounded} opacity-90`;
 }
-
 function Tube({ tube, index, onClick, selected }) {
   return (
     <div
@@ -93,25 +95,15 @@ export default function GamePage() {
   /* ---------- первая загрузка ---------- */
   useEffect(() => {
     (async () => {
-      // монеты по старому REST
-      try {
-        const { data: me } = await api.get("/users/me");
-        setCoins(me.coins);
-      } catch (e) {
-        console.error("GET /users/me:", e);
-      }
+      const me = await wsGetSelf();
+      setCoins(me.coins);
 
-      // пробуем получить текущий прогресс через WS
       let prog = await wsGetProgress();
-      if (prog?.error) prog = null;
+      if (prog.error) prog = null;
 
-      // если нет — стартуем 1 уровень
       if (!prog) {
-        const first = await api.get("/levels/1").then((r) => r.data);
-        prog = await wsStart({
-          levelId: 1,
-          state: first.level_data.state,
-        });
+        const first = await wsLevelGet(1);
+        prog = await wsStart({ levelId: 1, state: first.state });
       }
 
       setLevelId(prog.levelId);
@@ -144,7 +136,6 @@ export default function GamePage() {
       return;
     }
 
-    // оптимистичное обновление
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
     optimistic[selected] = newSource;
@@ -154,11 +145,10 @@ export default function GamePage() {
     const to = idx;
     setSelected(null);
 
-    // реальный запрос через WS
     const resp = await wsMove({ levelId, from, to });
     if (resp.error) {
       console.error("WS move error:", resp.error);
-      setState(state); // откат
+      setState(state); // rollback
       return;
     }
     setState(resp.state);
@@ -167,11 +157,8 @@ export default function GamePage() {
 
   /* ---------- сброс уровня ---------- */
   const resetLevel = async () => {
-    const { data } = await api.get(`/levels/${levelId}`);
-    const resp = await wsStart({
-      levelId,
-      state: data.level_data.state,
-    });
+    const first = await wsLevelGet(levelId);
+    const resp = await wsStart({ levelId, state: first.state });
     setState(resp.state);
     setSelected(null);
   };
@@ -179,6 +166,7 @@ export default function GamePage() {
   /* ---------- рендер ---------- */
   const topRow = state.slice(0, 4);
   const bottomRow = state.slice(4);
+
 
   return (
     <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
