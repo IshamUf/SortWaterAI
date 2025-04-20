@@ -1,10 +1,12 @@
+// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import api from "../api/api";
+import socket, { wsMove, wsGetProgress, wsStart } from "../sockets/socket";
 
-/* ---------- утилиты ---------- */
+/* ---------- локальные утилиты ---------- */
 const findTop = (tube) => tube.findIndex((c) => c !== -1);
-const clone = (s) => s.map((t) => [...t]);
+const deepClone = (s) => s.map((t) => [...t]);
 
 function canPour(src, dst) {
   const f = findTop(src);
@@ -31,33 +33,31 @@ function pour(src, dst) {
   }
   return { newSource: A, newTarget: B };
 }
-function isSolved(state) {
-  return state.every(
+const isSolved = (state) =>
+  state.every(
     (tube) =>
       tube.every((c) => c === -1) || tube.every((c) => c !== -1 && c === tube[0])
   );
-}
-/* -------------------------------- */
+/* -------------------------------------- */
 
-/* ---------- цветовая карта ---------- */
+/* ---------- Tube UI ---------- */
+const colorMap = [
+  "bg-[#8CB4C9]",
+  "bg-[#C9ADA7]",
+  "bg-[#B5CDA3]",
+  "bg-[#E0C097]",
+  "bg-[#A9A9B3]",
+  "bg-[#DAB6C4]",
+  "bg-[#A1C6EA]",
+  "bg-[#BFCBA8]",
+];
 function getColorBlock(c, idx, tube) {
   const base =
-    "w-full h-full mx-auto rounded-none transition-all duration-500 ease-in-out";
+    "w-full h-full mx-auto transition-all duration-500 ease-in-out";
   const rounded =
     idx === tube.length - 1 || tube[idx + 1] === -1 ? "rounded-b-full" : "";
-  const map = {
-    0: "bg-[#8CB4C9]",
-    1: "bg-[#C9ADA7]",
-    2: "bg-[#B5CDA3]",
-    3: "bg-[#E0C097]",
-    4: "bg-[#A9A9B3]",
-    5: "bg-[#DAB6C4]",
-    6: "bg-[#A1C6EA]",
-    7: "bg-[#BFCBA8]",
-  };
-  return `${base} ${map[c] || "bg-transparent"} ${rounded} opacity-90`;
+  return `${base} ${colorMap[c] || "bg-transparent"} ${rounded} opacity-90`;
 }
-/* ------------------------------------ */
 
 function Tube({ tube, index, onClick, selected }) {
   return (
@@ -80,6 +80,7 @@ function Tube({ tube, index, onClick, selected }) {
     </div>
   );
 }
+/* -------------------------------- */
 
 export default function GamePage() {
   const navigate = useNavigate();
@@ -89,10 +90,10 @@ export default function GamePage() {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  /* ---------- начальная загрузка ---------- */
+  /* ---------- первая загрузка ---------- */
   useEffect(() => {
     (async () => {
-      // 1) берем монеты
+      // монеты по старому REST
       try {
         const { data: me } = await api.get("/users/me");
         setCoins(me.coins);
@@ -100,26 +101,21 @@ export default function GamePage() {
         console.error("GET /users/me:", e);
       }
 
-      // 2) текущий прогресс
-      let p;
-      try {
-        p = (await api.get("/progress")).data;
-      } catch (e) {
-        if (e.response?.status !== 404) console.error("GET /progress:", e);
-      }
+      // пробуем получить текущий прогресс через WS
+      let prog = await wsGetProgress();
+      if (prog?.error) prog = null;
 
-      // 3) если нет — стартуем 1 уровень
-      if (!p) {
-        const first = (await api.get("/levels/1")).data;
-        await api.post("/progress/start", {
+      // если нет — стартуем 1 уровень
+      if (!prog) {
+        const first = await api.get("/levels/1").then((r) => r.data);
+        prog = await wsStart({
           levelId: 1,
           state: first.level_data.state,
         });
-        p = { levelId: 1, state: first.level_data.state, status: "in_progress" };
       }
 
-      setLevelId(p.levelId);
-      setState(p.state);
+      setLevelId(prog.levelId);
+      setState(prog.state);
     })();
   }, []);
 
@@ -148,9 +144,9 @@ export default function GamePage() {
       return;
     }
 
-    // оптимистично обновляем стейт
+    // оптимистичное обновление
     const { newSource, newTarget } = pour(state[selected], state[idx]);
-    const optimistic = clone(state);
+    const optimistic = deepClone(state);
     optimistic[selected] = newSource;
     optimistic[idx] = newTarget;
     setState(optimistic);
@@ -158,32 +154,29 @@ export default function GamePage() {
     const to = idx;
     setSelected(null);
 
-    // отправляем ход
-    try {
-      const { data } = await api.post("/progress/move", {
-        levelId,
-        from,
-        to,
-      });
-      setState(data.state);
-      if (data.status === "completed") setShowModal(true);
-    } catch (e) {
-      console.error("move error:", e?.response?.data || e);
+    // реальный запрос через WS
+    const resp = await wsMove({ levelId, from, to });
+    if (resp.error) {
+      console.error("WS move error:", resp.error);
       setState(state); // откат
+      return;
     }
+    setState(resp.state);
+    if (resp.status === "completed") setShowModal(true);
   };
 
   /* ---------- сброс уровня ---------- */
   const resetLevel = async () => {
     const { data } = await api.get(`/levels/${levelId}`);
-    await api.post("/progress/start", {
+    const resp = await wsStart({
       levelId,
       state: data.level_data.state,
     });
-    setState(data.level_data.state);
+    setState(resp.state);
     setSelected(null);
   };
 
+  /* ---------- рендер ---------- */
   const topRow = state.slice(0, 4);
   const bottomRow = state.slice(4);
 

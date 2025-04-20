@@ -7,11 +7,24 @@ import path from "path";
 import db from "./config/database.mjs";
 import redisClient from "./utils/redisClient.mjs";
 
-import verifyTelegramInit from "./middleware/verifyTelegramInit.mjs";
-import leaderboardRoutes from "./routes/leaderboard.mjs";
-import levelRoutes       from "./routes/levels.mjs";
-import progressRoutes    from "./routes/progress.mjs";
-import userRoutes        from "./routes/users.mjs";
+// backend/index.mjs
+import "dotenv/config";
+import express      from "express";
+import cors         from "cors";
+import { createServer } from "http";
+import { Server }   from "socket.io";
+import { fileURLToPath } from "url";
+import path         from "path";
+
+import db                  from "./config/database.mjs";
+import verifyTelegramInit  from "./middleware/verifyTelegramInit.mjs";
+import leaderboardRoutes   from "./routes/leaderboard.mjs";
+import levelRoutes         from "./routes/levels.mjs";
+import progressRoutes      from "./routes/progress.mjs";
+import userRoutes          from "./routes/users.mjs";
+
+import verifySocketAuth    from "./sockets/verifyTelegramInitSocket.mjs";
+import registerWsHandlers  from "./sockets/handlers.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -19,25 +32,37 @@ const __dirname  = path.dirname(__filename);
 const app  = express();
 const PORT = process.env.PORT || 5050;
 
+/* -------------------------  Express  ------------------------- */
 app.use(cors());
 app.use(express.json());
 
-// 1) отдаём статику+SPA
+// cтатика + SPA
 app.use(express.static(path.join(__dirname, "public")));
-app.get(/^\/(?!api\/).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+app.get(/^\/(?!api\/).*/, (_req, res) =>
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+);
 
-// 2) на все /api/* — проверка Telegram initData
+// REST‑API (старый способ)
 app.use("/api", verifyTelegramInit);
-
-// 3) API‑маршруты
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/levels",      levelRoutes);
 app.use("/api/progress",    progressRoutes);
 app.use("/api/users",       userRoutes);
 
-// 4) Запуск после Redis → БД
+/* ---------------------  WebSocket (socket.io)  --------------------- */
+const httpServer = createServer(app);
+const io = new Server(httpServer, { cors: { origin: "*" } });
+
+// валидация Telegram initData при подключении
+io.use(verifySocketAuth);
+
+// регистрация событий для каждого клиента
+io.on("connection", (socket) => {
+  console.log("WS connect:", socket.id);
+  registerWsHandlers(socket, io);
+});
+
+/* -----------------------  Startup sequence  ----------------------- */
 async function waitForDatabase(retries = 10) {
   while (retries--) {
     try {
@@ -45,27 +70,26 @@ async function waitForDatabase(retries = 10) {
       console.log("Database ready");
       return;
     } catch {
-      console.log("Waiting for database...");
+      console.log("Waiting for database…");
       await new Promise((r) => setTimeout(r, 2000));
     }
   }
   throw new Error("Database not ready");
 }
 
-async function startServer() {
+async function start() {
   try {
-    await redisClient.connect();
-    console.log("Redis connected");
-
     await waitForDatabase();
     await db.sync();
     console.log("Database synced");
 
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  } catch (e) {
-    console.error("Failed to start server:", e);
+    httpServer.listen(PORT, () =>
+      console.log(`HTTP + WebSocket server listening on :${PORT}`)
+    );
+  } catch (err) {
+    console.error("Failed to start server:", err);
     process.exit(1);
   }
 }
 
-startServer();
+start();
