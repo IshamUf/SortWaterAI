@@ -1,6 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api/api";
+import {
+  wsGetSelf,
+  wsLevelsCount,
+  wsGetProgress,
+  wsClaimDaily,
+  wsLeaderboard,
+} from "../sockets/socket";
 
 const DAILY_COOLDOWN_MS = 5 * 60 * 1000;
 const LOCALSTORAGE_KEY = "dailyGiftUnlockTime";
@@ -8,7 +14,6 @@ const LOCALSTORAGE_KEY = "dailyGiftUnlockTime";
 export default function WelcomePage() {
   const navigate = useNavigate();
 
-  // состояние
   const [username, setUsername] = useState("");
   const [coins, setCoins] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
@@ -17,39 +22,24 @@ export default function WelcomePage() {
   const [leaders, setLeaders] = useState([]);
   const [showLeadersModal, setShowLeadersModal] = useState(false);
 
-  // пасхалка
+  /* пасхалка */
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
   const TIMEOUT_MS = 30 * 60 * 1000;
 
+  /* ---------- начальная загрузка ---------- */
   useEffect(() => {
     (async () => {
-      // 1) GET /users/me
-      try {
-        const { data: user } = await api.get("/users/me");
-        setUsername(user.username);
-        setCoins(user.coins);
-      } catch (e) {
-        console.error("Ошибка при GET /users/me:", e);
-      }
+      const me   = await wsGetSelf();
+      const cnt  = await wsLevelsCount();
+      let prog   = await wsGetProgress();
+      if (prog.error) prog = { levelId: 1 };
 
-      // 2) GET /progress
-      try {
-        const { data: prog } = await api.get("/progress");
-        setCurrentLevel(prog.levelId);
-      } catch {
-        setCurrentLevel(1);
-      }
+      setUsername(me.username);
+      setCoins(me.coins);
+      setTotalLevels(cnt.count);
+      setCurrentLevel(prog.levelId);
 
-      // 3) GET /levels/count
-      try {
-        const { data } = await api.get("/levels/count");
-        setTotalLevels(data.count);
-      } catch (e) {
-        console.error("Ошибка при GET /levels/count:", e);
-      }
-
-      // 4) cooldown
       checkCooldown();
     })();
   }, []);
@@ -65,32 +55,28 @@ export default function WelcomePage() {
     }
   }
 
-  async function claimGift() {
-    try {
-      const { data } = await api.post("/users/me/daily");
-      setCoins(data.coins);
-      localStorage.setItem(LOCALSTORAGE_KEY, Date.now() + DAILY_COOLDOWN_MS);
+  /* ---------- действия ---------- */
+  const claimGift = async () => {
+    const res = await wsClaimDaily();
+    if (res.error === "cooldown") {
+      localStorage.setItem(LOCALSTORAGE_KEY, res.next);
       setGiftDisabled(true);
-      setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
-    } catch (e) {
-      if (e.response?.status === 429) {
-        setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
-      } else {
-        console.error("Ошибка при POST /users/me/daily:", e);
-      }
+      setTimeout(checkCooldown, res.next - Date.now());
+      return;
     }
-  }
+    setCoins(res.coins);
+    localStorage.setItem(LOCALSTORAGE_KEY, Date.now() + DAILY_COOLDOWN_MS);
+    setGiftDisabled(true);
+    setTimeout(checkCooldown, DAILY_COOLDOWN_MS);
+  };
 
-  async function openLeaders() {
-    try {
-      const { data } = await api.get("/leaderboard");
-      setLeaders(data);
-      setShowLeadersModal(true);
-    } catch (e) {
-      console.error("Ошибка при GET /leaderboard:", e);
-    }
-  }
+  const openLeaders = async () => {
+    const data = await wsLeaderboard();
+    setLeaders(data);
+    setShowLeadersModal(true);
+  };
 
+  /* ---------- idle‑пасхалка ---------- */
   function triggerEgg() {
     if (!audioRef.current) {
       audioRef.current = new Audio("/background.mp3");
@@ -117,6 +103,7 @@ export default function WelcomePage() {
     };
   }, []);
 
+  /* ---------- UI ---------- */
   return (
     <div className="h-[100dvh] w-full flex flex-col bg-gradient-to-b from-gray-900 to-gray-800 text-white px-4 py-6 overflow-hidden">
       <div className="max-w-lg w-full mx-auto flex flex-col h-full">

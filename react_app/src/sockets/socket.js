@@ -1,27 +1,22 @@
-// src/sockets/socket.js
 import { io } from "socket.io-client";
 
 const socket = io("/", {
-  transports: ["websocket"], // Telegram WebApp допускает WS
-  auth: {
-    initData: window?.Telegram?.WebApp?.initData,
-  },
+  transports: ["websocket"],
+  auth: { initData: window?.Telegram?.WebApp?.initData },
 });
 
-/* ---------- helpers c acks ---------- */
-export const wsMove = ({ levelId, from, to }) =>
-  new Promise((res) =>
-    socket.emit("progress:move", { levelId, from, to }, (answer) => res(answer))
-  );
+/* ---------- generic helper ---------- */
+const request = (event, payload) =>
+  new Promise((res) => socket.emit(event, payload, res));
 
-export const wsGetProgress = () =>
-  new Promise((res) =>
-    socket.emit("progress:get", (answer) => res(answer))
-  );
+/* ---------- exports ---------- */
+export const wsGetSelf      = ()            => request("user:get");
+export const wsClaimDaily   = ()            => request("user:daily");
+export const wsLevelsCount  = ()            => request("levels:count");
+export const wsLeaderboard  = ()            => request("leaderboard:get");
 
-export const wsStart = ({ levelId, state }) =>
-  new Promise((res) =>
-    socket.emit("progress:start", { levelId, state }, (answer) => res(answer))
-  );
+export const wsGetProgress  = ()            => request("progress:get");
+export const wsStart        = (p)           => request("progress:start", p);
+export const wsMove         = (p)           => request("progress:move", p);
 
 export default socket;

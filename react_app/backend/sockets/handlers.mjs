@@ -1,110 +1,114 @@
-// backend/sockets/handlers.mjs
-import Progress   from "../models/Progress.mjs";
-import Level      from "../models/Level.mjs";
+import Progress from "../models/Progress.mjs";
+import Level from "../models/Level.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
+import { Op, fn, col, literal } from "sequelize";
+import User from "../models/User.mjs";
 
-/**
- * Регистрирует все события для конкретного клиента
- * @param {import("socket.io").Socket} socket
- * @param {import("socket.io").Server} io
- */
-export default function registerHandlers(socket, io) {
-  /* --- echo‑пинг для отладки --- */
-  socket.on("ping", (msg, ack) => ack?.(`pong: ${msg}`));
-
-  /* ---------- progress:start ---------- */
-  socket.on("progress:start", async ({ levelId, state }, ack = () => {}) => {
-    try {
-      const userId = socket.user.id;
-
-      const [p] = await Progress.findOrCreate({
-        where: { userId, levelId },
-        defaults: { userId, levelId, state, status: "in_progress" },
-      });
-
-      if (p.status === "completed") {
-        return ack({ error: "Level already completed" });
-      }
-
-      p.state  = state;
-      p.status = "in_progress";
-      await p.save();
-      ack({ state: p.state, status: p.status });
-    } catch (err) {
-      console.error("WS progress:start:", err);
-      ack({ error: "Internal error" });
-    }
+export default function registerHandlers(socket) {
+  /* ---------- User ---------- */
+  socket.on("user:get", (ack) => {
+    const u = socket.user;
+    ack({ id: u.id, username: u.username, coins: u.coins });
   });
 
-  /* ---------- progress:move ---------- */
-  socket.on(
-    "progress:move",
-    async ({ levelId, from, to }, ack = () => {}) => {
-      try {
-        const userId = socket.user.id;
-        const p = await Progress.findOne({ where: { userId, levelId } });
-        if (!p) return ack({ error: "Progress not found" });
+  socket.on("user:daily", async (ack) => {
+    const cooldownMs = 5 * 60 * 1000;
+    const now = Date.now();
+    const last = socket.user.last_daily_reward
+      ? +socket.user.last_daily_reward
+      : 0;
 
-        if (p.status === "completed")
-          return ack({ error: "Level already completed" });
+    if (now - last < cooldownMs)
+      return ack({ error: "cooldown", next: last + cooldownMs });
 
-        const cur = p.state;
-        if (
-          from < 0 ||
-          from >= cur.length ||
-          to < 0 ||
-          to >= cur.length ||
-          !canPour(cur[from], cur[to])
-        ) {
-          return ack({ error: "Illegal move" });
-        }
+    socket.user.coins += 50;
+    socket.user.last_daily_reward = new Date(now);
+    await socket.user.save();
+    ack({ coins: socket.user.coins, next: now + cooldownMs });
+  });
 
-        const { newSource, newTarget } = pour(cur[from], cur[to]);
-        const newState       = [...cur];
-        newState[from] = newSource;
-        newState[to]   = newTarget;
+  /* ---------- Levels ---------- */
+  socket.on("levels:count", async (ack) => {
+    const count = await Level.count();
+    ack({ count });
+  });
 
-        p.state  = newState;
-        p.status = isSolved(newState) ? "completed" : "in_progress";
-        await p.save();
+  /* ---------- Leaderboard ---------- */
+  socket.on("leaderboard:get", async (ack) => {
+    const rows = await Progress.findAll({
+      where: { status: "completed" },
+      attributes: ["userId", [fn("COUNT", col("status")), "cnt"]],
+      group: ["userId", "User.id"],
+      order: [[literal("cnt"), "DESC"]],
+      include: [{ model: User, attributes: ["username"] }],
+      raw: true,
+    });
+    const board = rows.map((r) => ({
+      username: r["User.username"],
+      completedLevels: r.cnt,
+    }));
+    ack(board);
+  });
 
-        /* автосоздание следующего уровня */
-        if (p.status === "completed") {
-          const next = await Level.findByPk(levelId + 1);
-          if (next) {
-            await Progress.findOrCreate({
-              where: { userId, levelId: next.id },
-              defaults: {
-                userId,
-                levelId: next.id,
-                status: "in_progress",
-                state: JSON.parse(next.level_data).state,
-              },
-            });
-          }
-        }
+  /* ---------- Progress (ранее) ---------- */
+  socket.on("progress:get", async (ack) => {
+    const p = await Progress.findOne({
+      where: { userId: socket.user.id, status: "in_progress" },
+      order: [["updatedAt", "DESC"]],
+    });
+    if (!p) return ack({ error: "no_progress" });
+    ack({ levelId: p.levelId, state: p.state, status: p.status });
+  });
 
-        ack({ state: p.state, status: p.status });
-      } catch (err) {
-        console.error("WS progress:move:", err);
-        ack({ error: "Internal error" });
+  socket.on("progress:start", async ({ levelId, state }, ack) => {
+    const [p] = await Progress.findOrCreate({
+      where: { userId: socket.user.id, levelId },
+      defaults: { state, status: "in_progress" },
+    });
+    p.state = state;
+    p.status = "in_progress";
+    await p.save();
+    ack({ levelId: p.levelId, state: p.state, status: p.status });
+  });
+
+  socket.on("progress:move", async ({ levelId, from, to }, ack) => {
+    const p = await Progress.findOne({
+      where: { userId: socket.user.id, levelId },
+    });
+    if (!p) return ack({ error: "no_progress" });
+    if (p.status === "completed") return ack({ error: "completed" });
+
+    const cur = p.state;
+    if (
+      from < 0 ||
+      from >= cur.length ||
+      to < 0 ||
+      to >= cur.length ||
+      !canPour(cur[from], cur[to])
+    )
+      return ack({ error: "illegal" });
+
+    const { newSource, newTarget } = pour(cur[from], cur[to]);
+    const next = [...cur];
+    next[from] = newSource;
+    next[to] = newTarget;
+
+    p.state = next;
+    p.status = isSolved(next) ? "completed" : "in_progress";
+    await p.save();
+
+    if (p.status === "completed") {
+      const nextLevel = await Level.findByPk(levelId + 1);
+      if (nextLevel) {
+        await Progress.findOrCreate({
+          where: { userId: socket.user.id, levelId: nextLevel.id },
+          defaults: {
+            state: JSON.parse(nextLevel.level_data).state,
+            status: "in_progress",
+          },
+        });
       }
     }
-  );
-
-  /* ---------- progress:get ---------- */
-  socket.on("progress:get", async (ack = () => {}) => {
-    try {
-      const userId = socket.user.id;
-      const p = await Progress.findOne({
-        where: { userId, status: "in_progress" },
-        order: [["updatedAt", "DESC"]],
-      });
-      if (!p) return ack({ error: "No progress" });
-      ack({ levelId: p.levelId, state: p.state, status: p.status });
-    } catch (err) {
-      console.error("WS progress:get:", err);
-      ack({ error: "Internal error" });
-    }
+    ack({ state: p.state, status: p.status });
   });
 }
