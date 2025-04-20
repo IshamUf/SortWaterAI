@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 5050;
 /* статика + SPA */
 app.use(cors());
 app.use(express.static(path.join(__dirname, "public")));
-app.get("*", (_req, res) =>
+app.get(/^\/(?!socket\.io\/).*/, (_req, res) =>
   res.sendFile(path.join(__dirname, "public/index.html"))
 );
 
