@@ -1,22 +1,26 @@
 // backend/sockets/handlers.mjs
 import Progress from "../models/Progress.mjs";
-import Level    from "../models/Level.mjs";
-import User     from "../models/User.mjs";
+import Level from "../models/Level.mjs";
+import User from "../models/User.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 import { fn, col, literal } from "sequelize";
 
 export default function registerHandlers(socket) {
   /* ---------- User ---------- */
-  socket.on("user:get", (ack) => {
+  socket.on("user:get", (_ignored, ack) => {
     const u = socket.user;
     ack({ id: u.id, username: u.username, coins: u.coins });
   });
 
-  socket.on("user:daily", async (ack) => {
+  socket.on("user:daily", async (_ignored, ack) => {
     const cooldownMs = 5 * 60 * 1000;
-    const now  = Date.now();
-    const last = socket.user.last_daily_reward ? +socket.user.last_daily_reward : 0;
-    if (now - last < cooldownMs) return ack({ error: "cooldown", next: last + cooldownMs });
+    const now = Date.now();
+    const last = socket.user.last_daily_reward
+      ? +socket.user.last_daily_reward
+      : 0;
+
+    if (now - last < cooldownMs)
+      return ack({ error: "cooldown", next: last + cooldownMs });
 
     socket.user.coins += 50;
     socket.user.last_daily_reward = new Date(now);
@@ -25,47 +29,48 @@ export default function registerHandlers(socket) {
   });
 
   /* ---------- Levels ---------- */
-  socket.on("levels:count", async (ack) => {
-    const count = await Level.count();
-    ack({ count });
+  socket.on("levels:count", (_ignored, ack) => {
+    Level.count().then((count) => ack({ count }));
   });
 
   socket.on("levels:get", async (id, ack) => {
-    try {
-      const lvl = await Level.findByPk(id);
-      if (!lvl) return ack({ error: "not_found" });
-      ack({
-        id: lvl.id,
-        state: JSON.parse(lvl.level_data).state,
-        difficulty: lvl.difficulty,
-      });
-    } catch (err) {
-      console.error("levels:get", err);
-      ack({ error: "internal" });
-    }
+    const lvl = await Level.findByPk(id);
+    if (!lvl) return ack({ error: "not_found" });
+    ack({
+      id: lvl.id,
+      state: JSON.parse(lvl.level_data).state,
+      difficulty: lvl.difficulty,
+    });
   });
 
   /* ---------- Leaderboard ---------- */
-  socket.on("leaderboard:get", async (ack) => {
-    const rows = await Progress.findAll({
+  socket.on("leaderboard:get", (_ignored, ack) => {
+    Progress.findAll({
       where: { status: "completed" },
       attributes: ["userId", [fn("COUNT", col("status")), "cnt"]],
       group: ["userId", "User.id"],
       order: [[literal("cnt"), "DESC"]],
       include: [{ model: User, attributes: ["username"] }],
       raw: true,
-    });
-    ack(rows.map((r) => ({ username: r["User.username"], completedLevels: r.cnt })));
+    }).then((rows) =>
+      ack(
+        rows.map((r) => ({
+          username: r["User.username"],
+          completedLevels: r.cnt,
+        }))
+      )
+    );
   });
 
   /* ---------- Progress ---------- */
-  socket.on("progress:get", async (ack) => {
-    const p = await Progress.findOne({
+  socket.on("progress:get", (_ignored, ack) => {
+    Progress.findOne({
       where: { userId: socket.user.id, status: "in_progress" },
       order: [["updatedAt", "DESC"]],
+    }).then((p) => {
+      if (!p) return ack({ error: "no_progress" });
+      ack({ levelId: p.levelId, state: p.state, status: p.status });
     });
-    if (!p) return ack({ error: "no_progress" });
-    ack({ levelId: p.levelId, state: p.state, status: p.status });
   });
 
   socket.on("progress:start", async ({ levelId, state }, ack) => {
@@ -80,23 +85,28 @@ export default function registerHandlers(socket) {
   });
 
   socket.on("progress:move", async ({ levelId, from, to }, ack) => {
-    const p = await Progress.findOne({ where: { userId: socket.user.id, levelId } });
+    const p = await Progress.findOne({
+      where: { userId: socket.user.id, levelId },
+    });
     if (!p) return ack({ error: "no_progress" });
     if (p.status === "completed") return ack({ error: "completed" });
 
     const cur = p.state;
     if (
-      from < 0 || from >= cur.length ||
-      to   < 0 || to   >= cur.length ||
+      from < 0 ||
+      from >= cur.length ||
+      to < 0 ||
+      to >= cur.length ||
       !canPour(cur[from], cur[to])
-    ) return ack({ error: "illegal" });
+    )
+      return ack({ error: "illegal" });
 
     const { newSource, newTarget } = pour(cur[from], cur[to]);
     const next = [...cur];
     next[from] = newSource;
-    next[to]   = newTarget;
+    next[to] = newTarget;
 
-    p.state  = next;
+    p.state = next;
     p.status = isSolved(next) ? "completed" : "in_progress";
     await p.save();
 
