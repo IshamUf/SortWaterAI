@@ -1,3 +1,4 @@
+// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -11,6 +12,7 @@ import {
 /* ---------- утилиты ---------- */
 const findTop = (tube) => tube.findIndex((c) => c !== -1);
 const deepClone = (s) => s.map((t) => [...t]);
+
 function canPour(src, dst) {
   const f = findTop(src);
   if (f === -1) return false;
@@ -92,7 +94,7 @@ export default function GamePage() {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  /* ---------- первая загрузка ---------- */
+  /* ---------- инициализация ---------- */
   useEffect(() => {
     (async () => {
       const me = await wsGetSelf();
@@ -148,7 +150,7 @@ export default function GamePage() {
     const resp = await wsMove({ levelId, from, to });
     if (resp.error) {
       console.error("WS move error:", resp.error);
-      setState(state); // rollback
+      setState(state); // откат
       return;
     }
     setState(resp.state);
@@ -163,10 +165,18 @@ export default function GamePage() {
     setSelected(null);
   };
 
+  /* ---------- продолжить после победы ---------- */
+  const continueGame = async () => {
+    setShowModal(false);
+    const prog = await wsGetProgress(); // это уже следующий уровень
+    if (prog.error) return navigate("/"); // на всякий случай
+    setLevelId(prog.levelId);
+    setState(prog.state);
+  };
+
   /* ---------- рендер ---------- */
   const topRow = state.slice(0, 4);
   const bottomRow = state.slice(4);
-
 
   return (
     <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
@@ -231,11 +241,11 @@ export default function GamePage() {
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
-              <h3 className="text-lg font-bold mb-4">Уровень пройден!</h3>
+              <h3 className="text-lg font-bold mb-4">Level completed!</h3>
               <div className="flex flex-col space-y-3">
                 <button
                   className="bg-blue-600 px-4 py-2 rounded"
-                  onClick={() => window.location.reload()}
+                  onClick={continueGame}
                 >
                   Continue
                 </button>
