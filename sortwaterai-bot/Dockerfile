@@ -1,14 +1,15 @@
-# sortwaterai-bot/Dockerfile
-FROM python:3.10-slim AS base
+FROM python:3.10-slim
+
 WORKDIR /app
 
-COPY sortwaterai-bot/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt .
 
-COPY sortwaterai-bot /app
+# Устанавливаем torch (CPU‑only) и все остальные зависимости
+RUN pip install --no-cache-dir \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      -r requirements.txt
 
-# ставим зависимости из ai_functions
-COPY ai_functions/requirements.txt /app/ai_functions/requirements.txt
-RUN pip install --no-cache-dir -r /app/ai_functions/requirements.txt
+COPY . .
 
-CMD ["python", "bot.py"]
+# По умолчанию скрипт не запускается сам — его дергает bot.py
+CMD ["python", "add_ai_level.py"]
