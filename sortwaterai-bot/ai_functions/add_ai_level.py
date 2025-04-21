@@ -41,12 +41,8 @@ DB_CFG = {
     "port":     int(os.getenv("POSTGRES_PORT", 5432)),
 }
 
-TARGET_DISTRIB   = json.loads(os.getenv(
-    "TARGET_DISTRIB", '{"easy":0.3,"medium":0.5,"hard":0.2}'
-))
-STEPS_THRESHOLDS = json.loads(os.getenv(
-    "STEPS_THRESHOLDS", '{"easy":[0,10],"medium":[11,25],"hard":[26,999]}'
-))
+TARGET_DISTRIB   = json.loads(os.getenv("TARGET_DISTRIB"))
+STEPS_THRESHOLDS = json.loads(os.getenv("STEPS_THRESHOLDS"))
 WINDOW_LEVELS    = int(os.getenv("WINDOW_LEVELS", 10))
 MAX_ATTEMPTS     = int(os.getenv("MAX_GENERATE_ATTEMPTS", 5))
 
