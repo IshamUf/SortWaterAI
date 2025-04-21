@@ -1,3 +1,19 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@layer utilities {
+  /* Плавная «качалка» фона влево‑вправо */
+  @keyframes bgSlideX {
+    0%, 100% { background-position: 50% 50%; }
+    50%       { background-position: 45% 50%; }
+  }
+
+  /* Фоновое фото + анимация */
+  .bg-animated-photo {
+    background-image: url('/images/bg.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    animation: bgSlideX 20s ease-in-out infinite;
+  }
+}
