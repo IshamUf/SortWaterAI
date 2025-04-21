@@ -10,7 +10,7 @@ COPY sortwaterai-bot/requirements.txt ./
 
 # 2) Ставим зависимости
 #    Для CPU‑only сборки PyTorch используем extra‑index‑url
-RUN pip install --no‑cache‑dir \
+RUN pip install --no-cache-dir \
       --extra-index-url https://download.pytorch.org/whl/cpu \
       -r requirements.txt
 
