@@ -132,7 +132,7 @@ export default function GamePage() {
   const bottomRow = state.slice(4);
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col justify-start bg-gradient-to-b from-gray-900 to-gray-800 px-4 py-6 overflow-hidden">
+    <div className="h-[100dvh] w-full flex flex-col justify-start px-4 py-6 overflow-hidden bg-animated-photo">
       <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6 px-4">
