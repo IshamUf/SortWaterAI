@@ -58,6 +58,7 @@ services:
       - ./sortwaterai-bot/.env    # подтягиваем те же переменные
     volumes:
       - ./ai_functions:/app
+      - ./ai_functions/ai_models:/app/ai_functions/ai_models
     depends_on:
       - postgres
 

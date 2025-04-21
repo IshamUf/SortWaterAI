@@ -49,11 +49,11 @@ async def cmd_help(msg: types.Message):
 @dp.message_handler(commands=["add_levels"])
 async def cmd_add_levels(msg: types.Message):
     if int(msg.from_user.id) != int(ADMIN_ID):
-        return await msg.reply(f"⛔ Команда доступна только администратору. {msg.from_user.id} {ADMIN_ID}")
+        return await msg.reply("⛔ Команда доступна только администратору.")
 
     parts = msg.get_args().split()
     if len(parts) != 2:
-        models = [p.stem for p in AI_MODELS_DIR.glob("*.pt")]
+        models = [p.stem for p in AI_MODELS_DIR.glob("*.pth")]
         pretty = ", ".join(models) or "—папка пуста—"
         return await msg.reply(
             "Формат: /add_levels <model_name> <count>\n"
