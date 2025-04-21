@@ -103,7 +103,7 @@ export default function WelcomePage() {
       {/* Фоновое фото + анимация */}
       <div className="absolute inset-0 bg-animated-photo" />
       {/* Градиент‑оверлей, чтобы текст был читаем */}
-      <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-gray-800 opacity-80" />
+      <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-gray-800 opacity-0" />
       {/* Сам контент поверх фона */}
       <div className="relative z-10 flex flex-col text-white px-4 py-6 h-full overflow-hidden">
         <div className="max-w-lg w-full mx-auto flex flex-col h-full">
