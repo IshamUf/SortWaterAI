@@ -39,7 +39,7 @@ services:
 
   bot:
     build:
-      context: .                           # весь репозиторий
+      context: .
       dockerfile: sortwaterai-bot/Dockerfile
     container_name: sortwater_bot
     env_file:
@@ -49,8 +49,8 @@ services:
       - redis
       - postgres
     volumes:
-      - ./sortwaterai-bot:/app            # код бота
-      - ./ai_functions:/app/ai_functions  # скрипты и модели AI
+      - ./sortwaterai-bot:/app
+      - ./ai_functions:/app/ai_functions
 
 volumes:
   postgres_data:
