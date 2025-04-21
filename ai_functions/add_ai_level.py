@@ -68,8 +68,25 @@ def fingerprint(state) -> str:
     return hashlib.sha1(norm.encode()).hexdigest()
 
 def existing_hashes(cur) -> set:
-    cur.execute('SELECT encode(digest(level_data, \'sha1\'), \'hex\') FROM "Levels"')
-    return {h[0] for h in cur.fetchall()}
+    """
+    Считываем из БД все level_data (TEXT),
+    парсим JSON и считаем SHA1 только от поля 'state'.
+    """
+    cur.execute('SELECT level_data FROM "Levels"')
+    hashes = set()
+    for (raw,) in cur.fetchall():
+        try:
+            data = json.loads(raw)
+            state = data.get("state")
+            if state is None:
+                continue
+            # fingerprint — та же функция, что у вас в файле
+            h = fingerprint(state)
+            hashes.add(h)
+        except Exception:
+            # если вдруг невалидный JSON — пропускаем
+            continue
+    return hashes
 
 # ------------------------- AI generator (заглушка) ------------------------
 def get_generated_levels(model: str, count: int) -> List[Dict]:
