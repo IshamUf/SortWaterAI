@@ -39,8 +39,8 @@ services:
 
   bot:
     build:
-      context: .                         # весь проект в контексте
-      dockerfile: sortwaterai-bot/Dockerfile
+      context: .                                 # <--- обращаемся в корень
+      dockerfile: sortwaterai-bot/Dockerfile    # <--- берём именно этот докерфайл
     container_name: sortwater_bot
     env_file:
       - ./sortwaterai-bot/.env
@@ -49,8 +49,8 @@ services:
       - redis
       - postgres
     volumes:
-      - ./sortwaterai-bot:/app
-      - ./ai_functions:/app/ai_functions
+      - ./sortwaterai-bot:/app                  # монтируем код бота
+      - ./ai_functions:/app/ai_functions        # и код AI‑функций
 
 volumes:
   postgres_data:
