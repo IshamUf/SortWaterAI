@@ -1,23 +1,23 @@
-# sortwaterai-bot/Dockerfile
+# Базовый образ Python
 FROM python:3.10-slim
 
-# куда всё копируем
+# Рабочая директория внутри контейнера
 WORKDIR /app
 
-# 1) Копируем и ставим зависимости бота
-COPY sortwaterai-bot/requirements.txt ./requirements.txt
-RUN pip install --no‑cache‑dir -r requirements.txt
+# 1) Копируем единый файл requirements.txt (бот + AI‑сервис)
+#    Этот файл должен содержать все зависимости: aiogram, psycopg2, numpy, torch, gymnasium и т.п.
+COPY sortwaterai-bot/requirements.txt ./
 
-# 2) Копируем и ставим зависимости AI‑сервиса
-#    (тот же файл, что лежит в ai_functions/requirements.txt)
-COPY ai_functions/requirements.txt ./ai_requirements.txt
+# 2) Ставим зависимости
+#    Для CPU‑only сборки PyTorch используем extra‑index‑url
 RUN pip install --no‑cache‑dir \
-      --extra‑index‑url https://download.pytorch.org/whl/cpu \
-      -r ai_requirements.txt
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      -r requirements.txt
 
-# 3) Копируем исходники бота и AI‑скрипты
-COPY sortwaterai-bot/    ./           # сюда попадает bot.py и всё из sortwaterai-bot
-COPY ai_functions/       ./ai_functions/
+# 3) Копируем только код бота
+#    ai_functions мы будем монтировать сверху из docker-compose
+COPY sortwaterai-bot/ ./
 
-# Точка входа: запускаем бот, который изнутри дергает add_ai_level.py
+# Точка входа — запускаем бот, который сам дергает add_ai_level.py
 CMD ["python", "bot.py"]
+
