@@ -55,12 +55,11 @@ services:
       dockerfile: Dockerfile
     container_name: sortwater_ai
     env_file:
-      - ./sortwaterai-bot/.env           # подтягиваем те же переменные, что и бот
+      - ./sortwaterai-bot/.env    # подтягиваем те же переменные
     volumes:
       - ./ai_functions:/app
     depends_on:
       - postgres
-    # никаких команд по умолчанию — скрипты вызываются из bot.py
 
 volumes:
   postgres_data:
