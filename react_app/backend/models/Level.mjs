@@ -1,31 +1,36 @@
-// backend/models/Level.mjs
 import { DataTypes } from "sequelize";
-import sequelize      from "../config/database.mjs";
+import sequelize from "../config/database.mjs";
 
 const Level = sequelize.define(
   "Level",
   {
-    /* JSON‑строка с состоянием колб  */
+    // JSON-строка с состоянием колб
     level_data: {
       type: DataTypes.TEXT,
       allowNull: false,
     },
-
-    /* Сложность теперь ХРАНИМ СЛОВОМ (easy / medium / hard …) */
+    // Сложность теперь ХРАНИМ СЛОВОМ (easy / medium / hard …)
     difficulty: {
-      type: DataTypes.STRING,   // ← было INTEGER
+      type: DataTypes.STRING,
       allowNull: true,
     },
-
-    /* Для будущего: сколько ходов делает ИИ‑solver */
+    // Для будущего: сколько ходов делает ИИ-solver
     ai_steps: {
       type: DataTypes.INTEGER,
-      allowNull: true,          // пока не используем
+      allowNull: true,
+    },
+    // Ходы решения: массив пар [from, to]
+    solution: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
   },
   {
     tableName: "Levels",
+    // Отключаем автоматическое удаление столбцов при sync
+    timestamps: true,
   }
 );
 
 export default Level;
+

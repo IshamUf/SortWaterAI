@@ -169,6 +169,7 @@ def run_ingest(model_name: str, add_count: int):
         conn.commit()
         inserted += 1
         db_hashes.add(fph)
+
         in_run_hashes.add(fph)
 
         if simple_mode:
