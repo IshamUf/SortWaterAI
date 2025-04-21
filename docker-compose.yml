@@ -49,23 +49,6 @@ services:
       - redis
       - postgres
     volumes:
-      # ваш исходный код бота
-      - ./sortwaterai-bot:/app
-      # монтируем ai_functions в корень контейнера
-      - ./ai_functions:/ai_functions
-
-  bot:
-    build:
-      context: ./sortwaterai-bot
-      dockerfile: Dockerfile
-    container_name: sortwater_bot
-    env_file:
-      - ./sortwaterai-bot/.env
-    depends_on:
-      - react_app
-      - redis
-      - postgres
-    volumes:
       # Код бота
       - ./sortwaterai-bot:/app
       # Код AI‑функций (скрипты, модели)
