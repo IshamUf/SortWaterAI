@@ -1,3 +1,4 @@
+// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -169,43 +170,52 @@ export default function GamePage() {
         {/* FIELD */}
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
-          <div className="flex items-center space-x-4 mb-4">
-            {/* Левая кнопка */}
-            <div className="flex flex-col items-center">
-              <button className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl cursor-not-allowed">
+
+          {/* Moves + side buttons */}
+          <div className="relative w-full mb-4 h-14">
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center flex-shrink-0">
+              <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl">
                 🤖
               </button>
-              <span className="mt-1 text-sm text-gray-300">100</span>
+              <span className="text-xs mt-1 text-white">100</span>
             </div>
-
-            {/* Счётчик ходов */}
-            <h2 className="text-xl font-bold">Moves: {moves}</h2>
-
-            {/* Правая кнопка */}
-            <div className="flex flex-col items-center">
-              <button className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl cursor-not-allowed">
+            <h2 className="text-xl font-bold text-center">Moves: {moves}</h2>
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center flex-shrink-0">
+              <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl">
                 ❓
               </button>
-              <span className="mt-1 text-sm text-gray-300">10</span>
+              <span className="text-xs mt-1 text-white">10</span>
             </div>
           </div>
 
+          {/* Tubes */}
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
               {topRow.map((tube, i) => (
-                <Tube key={i} tube={tube} index={i} onClick={clickTube} selected={selected === i} />
+                <Tube
+                  key={i}
+                  tube={tube}
+                  index={i}
+                  onClick={clickTube}
+                  selected={selected === i}
+                />
               ))}
             </div>
             {bottomRow.length > 0 && (
               <div className="flex justify-center gap-4">
                 {bottomRow.map((tube, i) => (
-                  <Tube key={i+4} tube={tube} index={i+4} onClick={clickTube} selected={selected === i+4} />
+                  <Tube
+                    key={i + 4}
+                    tube={tube}
+                    index={i + 4}
+                    onClick={clickTube}
+                    selected={selected === i + 4}
+                  />
                 ))}
               </div>
             )}
           </div>
 
-          {/* Кнопка сброса */}
           <button
             onClick={resetLevel}
             className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
@@ -220,7 +230,10 @@ export default function GamePage() {
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
               <h3 className="text-lg font-bold mb-4">Level completed!</h3>
               <div className="flex flex-col space-y-3">
-                <button className="bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition" onClick={continueGame}>
+                <button
+                  className="bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
+                  onClick={continueGame}
+                >
                   Continue
                 </button>
                 <button
