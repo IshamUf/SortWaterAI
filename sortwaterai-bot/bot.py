@@ -49,7 +49,7 @@ async def cmd_help(msg: types.Message):
 @dp.message_handler(commands=["add_levels"])
 async def cmd_add_levels(msg: types.Message):
     if msg.from_user.id != ADMIN_ID:
-        return await msg.reply("⛔ Команда доступна только администратору.")
+        return await msg.reply(f"⛔ Команда доступна только администратору. {msg.from_user.id} {ADMIN_ID}")
 
     parts = msg.get_args().split()
     if len(parts) != 2:
