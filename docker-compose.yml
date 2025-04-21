@@ -49,10 +49,8 @@ services:
       - redis
       - postgres
     volumes:
-      # Код бота
       - ./sortwaterai-bot:/app
-      # Код AI-функций (скрипты и модели)
-      - ./ai_functions:/app/ai_functions
+      - ./ai_functions:/ai_functions
 
 volumes:
   postgres_data:
