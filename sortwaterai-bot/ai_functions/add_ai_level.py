@@ -152,17 +152,29 @@ def run_ingest(model_name: str, add_count: int):
 
         lvl = pool.pop(best_idx)
         fph = fingerprint(lvl["state"])
+        # перед дампом в JSON
+        state = lvl["state"]
+        solution = lvl.get("solution")
+        if solution is not None:
+            # solution — List[List[numpy.int64]], превращаем в List[List[int]]
+            solution = [[int(src), int(dst)] for src, dst in solution]
+
+        payload = {
+            "state": state,
+            "solution": solution
+        }
+
         cur.execute(
             """INSERT INTO "Levels"
                (level_data, difficulty, ai_steps, "createdAt", "updatedAt")
-             VALUES (%s,%s,%s,%s,%s)""",
+               VALUES (%s,%s,%s,%s,%s)""",
             (
-                json.dumps({"state": lvl["state"], "solution": lvl.get("solution")}),
+                json.dumps(payload),
                 lvl["difficulty"],
                 lvl["ai_steps"],
                 datetime.utcnow(),
                 datetime.utcnow(),
-            )
+            ),
         )
         conn.commit()
         inserted += 1
