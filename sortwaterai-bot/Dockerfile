@@ -1,19 +1,26 @@
-# Базовый образ
-FROM python:3.10-slim
+# 1) Базовый образ для бота
+FROM python:3.10-slim AS bot-base
 
-# Рабочая папка в контейнере
 WORKDIR /app
 
-# Копируем файл зависимостей из корня (т.к. build.context = .)
-COPY requirements.txt ./
+# Копируем только requirements из папки бота
+COPY sortwaterai-bot/requirements.txt ./requirements.txt
 
-# Устанавливаем PyTorch (CPU‑only) и остальные библиотеки
+# Ставим PyTorch CPU-only и всё остальное
 RUN pip install --no-cache-dir \
       --extra-index-url https://download.pytorch.org/whl/cpu \
       -r requirements.txt
 
-# Копируем весь код бота внутрь /app
-# (после этого мы можем монтировать /app сверху вашим локальным кодом)
+# 2) Сборка финального образа
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# берём установленные пакеты из bot-base
+COPY --from=bot-base /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+COPY --from=bot-base /usr/local/bin /usr/local/bin
+
+# Копируем код бота
 COPY sortwaterai-bot/ .
 
 # По умолчанию запускаем бот
