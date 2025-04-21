@@ -1,24 +1,19 @@
-# 1) Сначала образ для бота (aiogram, psycopg2 и т.п.)
+# 1) Установка зависимостей бота
 FROM python:3.10-slim AS base
-
 WORKDIR /app
 
-# Копируем зависимости бота
-COPY requirements.txt ./
+# 1.1 копируем и ставим зависимости бота
+COPY sortwaterai-bot/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем код бота
-COPY . .
+# 2) Копируем весь код бота
+COPY sortwaterai-bot /app
 
-# 2) Устанавливаем зависимости AI‑сервиса
-# (берём файл из папки ai_functions через контекст docker-compose volume)
-FROM base AS final
+# 3) Установка зависимостей ai_functions
+#    (мы смонтировали ./ai_functions в /app/ai_functions через volume,
+#     но чтобы они были в образе при сборке, копируем их из контекста)
+COPY ai_functions/requirements.txt /app/ai_functions/requirements.txt
+RUN pip install --no-cache-dir -r /app/ai_functions/requirements.txt
 
-# Копируем файл зависимостей AI
-COPY ../ai_functions/requirements.txt ./ai_functions/requirements.txt
-
-# Ставим зависимости AI‑сервиса
-RUN pip install --no-cache-dir -r ai_functions/requirements.txt
-
-# Точка входа
+# 4) Точка входа
 CMD ["python", "bot.py"]
