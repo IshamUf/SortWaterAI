@@ -2,16 +2,18 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# зависимости бота (aiogram, psycopg2 и т.п.)
-COPY sortwaterai-bot/requirements.txt ./
+# 1) Сначала ставим зависимости самого бота
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 2) Ставим все зависимости для ai_functions (numpy, torch, gymnasium…)
+#    Используем тот же файл requirements.txt, что лежит в ai_functions
+COPY ../ai_functions/requirements.txt ./ai_functions_requirements.txt
 RUN pip install --no-cache-dir \
       --extra-index-url https://download.pytorch.org/whl/cpu \
-      -r requirements.txt
+      -r ai_functions_requirements.txt
 
-# копируем только код бота
-COPY sortwaterai-bot/ .
-
-# Папка ai_functions будет примонтирована томом из docker-compose
-# Скрипты AI дергаются ботом напрямую, сами не стартуют.
+# 3) Копируем код бота
+COPY . .
 
 CMD ["python", "bot.py"]
