@@ -3,9 +3,6 @@ import Level    from "../models/Level.mjs";
 import User     from "../models/User.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 import { fn, col, literal } from "sequelize";
-import axios from "axios";
-// URL вашего FastAPI‑сервиса (описано в docker‑compose как ai_func)
-const AI_FUNC_URL = process.env.AI_FUNC_URL || "http://sortwater_ai_func:8001";
 
 /**
  * Из args достаёт последний аргумент, если это функция (ack).
@@ -284,31 +281,4 @@ export default function registerHandlers(socket) {
     }
   });
 
-    // ——— Progress:solve ——————————————————————————
-  socket.on("progress:solve", async (...args) => {
-    const ack     = extractAck(args);
-    const payload = extractPayload(args);
-    try {
-      if (!ack) return;
-      const { levelId, state, user_moves } = payload ?? {};
-      if (
-        typeof levelId   !== "number" ||
-        !Array.isArray(state) ||
-        typeof user_moves !== "number"
-      ) {
-        return ack({ error: "invalid_payload" });
-      }
-      // Пересылаем в AI‑микросервис
-      const { data } = await axios.post(
-        `${AI_FUNC_URL}/solve_level`,
-        { level_id: levelId, state, user_moves }
-      );
-      // data = { solvable, ai_steps, solution }
-      return ack(data);
-    } catch (err) {
-      console.error("progress:solve error", err);
-      return ack({ error: "internal" });
-    }
-  });
 }
-
