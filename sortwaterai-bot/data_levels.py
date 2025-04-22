@@ -24,7 +24,7 @@ def main():
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
         cur.execute(
-            'SELECT id, level_data, difficulty, ai_steps, solution, "createdAt", "updatedAt" '
+            'SELECT id, level_data, difficulty, ai_steps, solution, level_format, "createdAt", "updatedAt" '
             'FROM "Levels" ORDER BY id'
         )
         rows = cur.fetchall()
@@ -44,6 +44,7 @@ def main():
             diff        = row["difficulty"]
             steps       = row["ai_steps"]
             solution    = row["solution"]  # JSONB → уже в виде списка списков или None
+            level_format = row["level_format"]
             created_at  = row["createdAt"]
             updated_at  = row["updatedAt"]
 
@@ -52,6 +53,7 @@ def main():
             print(f"  difficulty: {diff!r}")
             print(f"  ai_steps:   {steps}")
             print(f"  solution:   {solution}")
+            print(f"  level_format: {level_format}")
             print(f"  createdAt:  {created_at}")
             print(f"  updatedAt:  {updated_at}")
             print()
