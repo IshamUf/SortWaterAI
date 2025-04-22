@@ -22,25 +22,18 @@ def get_generated_levels(model: str, count: int) -> List[Dict]:
       }
     """
     try:
-        N, K, L = map(int, model.split("_"))
+        N, K, L = map(int, model.split("_")) # N-Число пробирок, K-сколько пустых, L - Число слоёв
     except ValueError:
         raise RuntimeError(f"Некорректное имя модели: {model}")
-    num_colors = N - K
-    max_steps  = int(os.getenv("MAX_STEPS_PER_GAME", 300))
+
+    max_steps  = int(os.getenv("MAX_STEPS_PER_GAME", 100))
     device     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model_path = Path(__file__).parent / "ai_models" / f"{model}.pth"
     if not model_path.exists():
         raise RuntimeError(f"Модель не найдена: {model_path}")
-    agent = MaskedDQNAgent(
-        state_dim = N * L,
-        action_dim= N * N,
-        net_arch = [(N*(N-1))*25, (N*(N-1))*10],
-        device   = device
-    )
-    agent.load_state_dict(torch.load(model_path, map_location=device))
-    agent.eval()
 
+    num_colors = N - K
     base_env = WaterSortEnvFixed(
         num_tubes = N,
         max_layers= L,
@@ -48,6 +41,20 @@ def get_generated_levels(model: str, count: int) -> List[Dict]:
         max_steps = max_steps
     )
     env = DiscreteActionWrapper(base_env)
+
+    obs_dim = env.observation_space.shape[0]
+    act_dim = env.action_space.n
+    net_arch = [(N*(N-1))*25, (N*(N-1))*10]
+
+    agent = MaskedDQNAgent(
+        state_dim = obs_dim,
+        action_dim= act_dim,
+        net_arch = net_arch,
+        device   = device
+    )
+    agent.load_state_dict(torch.load(model_path, map_location=device))
+    agent.eval()
+
 
     results = []
     seen = set()
