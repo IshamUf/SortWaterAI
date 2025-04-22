@@ -7,6 +7,7 @@ import {
   wsGetProgress,
   wsStart,
   wsMove,
+  wsSolveLevel, // new solver call
 } from "../sockets/socket";
 
 /* ---------- утилиты ---------- */
@@ -20,17 +21,18 @@ const canPour   = (src, dst) => {
 const pour      = (src, dst) => {
   const A = [...src], B = [...dst];
   let f = findTop(A), color = A[f], cnt = 1;
-  for (let i = f+1; i < A.length && A[i]===color; i++) cnt++;
-  let t = findTop(B); t = t===-1?B.length-1:t-1;
-  while(cnt>0 && t>=0 && B[t]===-1){
-    B[t]=color; A[f]=-1; f++; t--; cnt--;
+  for (let i = f + 1; i < A.length && A[i] === color; i++) cnt++;
+  let t = findTop(B);
+  t = t === -1 ? B.length - 1 : t - 1;
+  while (cnt > 0 && t >= 0 && B[t] === -1) {
+    B[t] = color; A[f] = -1; f++; t--; cnt--;
   }
   return { newSource: A, newTarget: B };
 };
 const isSolved  = (state) =>
   state.every(tube =>
-    tube.every(c => c===-1) ||
-    tube.every(c => c!==-1 && c===tube[0])
+    tube.every(c => c === -1) ||
+    tube.every(c => c !== -1 && c === tube[0])
   );
 
 /* ---------- Tube UI ---------- */
@@ -40,24 +42,18 @@ const colorMap = [
 ];
 const getColorBlock = (c, idx, tube) => {
   const base    = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
-  const rounded = (idx===tube.length-1||tube[idx+1]===-1)? "rounded-b-full":"";
-  return `${base} ${colorMap[c]||"bg-transparent"} ${rounded} opacity-90`;
+  const rounded = (idx === tube.length - 1 || tube[idx+1] === -1)
+    ? "rounded-b-full" : "";
+  return `${base} ${colorMap[c] || "bg-transparent"} ${rounded} opacity-90`;
 };
 const Tube = ({ tube, index, onClick, selected }) => (
   <div
-    onClick={()=>onClick(index)}
-    className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch cursor-pointer ${
-      selected?"border-blue-400":"border-[#3B3F45]"
-    } bg-transparent overflow-hidden`}
+    onClick={() => onClick(index)}
+    className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col items-stretch cursor-pointer bg-transparent overflow-hidden ${selected ? 'border-blue-400' : 'border-[#3B3F45]'}`}
   >
     <div className="flex flex-col justify-end pt-2 h-full">
-      {tube.map((cell,i)=>(
-        <div
-          key={i}
-          className={`flex-1 mx-[2px] ${
-            cell===-1? "opacity-0": getColorBlock(cell,i,tube)
-          }`}
-        />
+      {tube.map((cell,i) => (
+        <div key={i} className={`flex-1 mx-[2px] ${cell === -1 ? 'opacity-0' : getColorBlock(cell,i,tube)}`} />
       ))}
     </div>
   </div>
@@ -70,87 +66,118 @@ export default function GamePage() {
   const [moves,        setMoves]        = useState(0);
   const [coins,        setCoins]        = useState(0);
   const [selected,     setSelected]     = useState(null);
-  const [showModal,    setShowModal]    = useState(false);
-  const [modalReward,  setModalReward]  = useState(0);
-  const [modalMessage, setModalMessage] = useState("Level completed!");
 
-  // инициализация
-  useEffect(()=>{
-    (async()=>{
-      const me   = await wsGetSelf(); setCoins(me.coins);
-      let prog   = await wsGetProgress();
+  const [showModal,    setShowModal]    = useState(false);
+  const [modalType,    setModalType]    = useState('success'); // 'success' | 'fail'
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalReward,  setModalReward]  = useState(0);
+  const [closeEnabled, setCloseEnabled] = useState(true);
+  const [isSolving,    setIsSolving]    = useState(false);
+
+  // init
+  useEffect(() => {
+    (async () => {
+      const me = await wsGetSelf(); setCoins(me.coins);
+      let prog = await wsGetProgress();
       if (prog.error) prog = await wsStart({ levelId: 1 });
       setLevelId(prog.levelId);
       setState(prog.state);
       setMoves(prog.moves);
     })();
-  },[]);
+  }, []);
 
-  // при открытии модалки запускаем фейерверк
-  useEffect(()=>{
-    if(showModal){
-      confetti({ particleCount:100, spread:60, origin:{x:0.5,y:0.7} });
+  // confetti on success
+  useEffect(() => {
+    if (showModal && modalType === 'success') {
+      confetti({ particleCount: 100, spread: 60, origin: { x: 0.5, y: 0.7 } });
     }
-  },[showModal]);
+  }, [showModal, modalType]);
 
-  if(!state) return (
+  if (!state) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
       Loading…
     </div>
   );
 
-  const solved   = isSolved(state);
-  const topRow   = state.slice(0,4);
-  const bottomRow= state.slice(4);
+  const solved    = isSolved(state);
+  const topRow    = state.slice(0, 4);
+  const bottomRow = state.slice(4);
 
-  // ход
-  const clickTube = async(idx)=>{
-    if(solved) return;
-    if(selected===null){
-      if(state[idx][state[idx].length-1]!==-1) setSelected(idx);
+  // human move
+  const clickTube = async (idx) => {
+    if (solved) return;
+    if (selected === null) {
+      if (state[idx][state[idx].length-1] !== -1) setSelected(idx);
       return;
     }
-    if(selected===idx){ setSelected(null); return; }
-    if(!canPour(state[selected], state[idx])){ setSelected(null); return; }
+    if (selected === idx) { setSelected(null); return; }
+    if (!canPour(state[selected], state[idx])) { setSelected(null); return; }
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
-    optimistic[selected]=newSource;
-    optimistic[idx]     =newTarget;
+    optimistic[selected] = newSource;
+    optimistic[idx]      = newTarget;
     setState(optimistic);
 
-    const from=selected, to=idx;
+    const from = selected, to = idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
-    if(resp.error){
-      console.error(resp.error);
-      return setState(state);
-    }
+    if (resp.error) { console.error(resp.error); return setState(state); }
     setState(resp.state);
     setMoves(resp.moves);
-    if(resp.status==="completed"){
-      // назначаем награду и сообщение
-      setModalReward(resp.reward);
-      setModalMessage(resp.message);
+    if (resp.status === 'completed') {
+      // success branch
+      setModalType('success');
+      setModalMessage('Level completed!');
+      setModalReward(resp.coins - coins);
       setCoins(resp.coins);
       setShowModal(true);
     }
   };
 
-  // сброс
-  const resetLevel = async()=>{
+  // AI solve
+  const handleSolve = async () => {
+    if (isSolving) return;
+    setIsSolving(true);
+    try {
+      const resp = await wsSolveLevel({ levelId, state, user_moves: moves });
+      setIsSolving(false);
+      if (!resp.solvable) {
+        setModalType('fail');
+        setModalMessage("Sorry, I can’t solve this configuration.");
+        setModalReward(0);
+        setCloseEnabled(false);
+        setShowModal(true);
+        setTimeout(() => setCloseEnabled(true), 3000);
+      } else {
+        setModalType('success');
+        setModalMessage(resp.ai_steps < moves ? 'Wow, you beat the AI!' : 'Level completed!');
+        const reward = resp.ai_steps < moves ? 3 : resp.ai_steps > moves ? 1 : 2;
+        setModalReward(reward);
+        setCoins(coins + reward);
+        setShowModal(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsSolving(false);
+    }
+  };
+
+  // reset
+  const resetLevel = async () => {
     const resp = await wsStart({ levelId });
     setState(resp.state);
     setMoves(resp.moves);
     setSelected(null);
+    setShowModal(false);
   };
 
-  // продолжить
-  const continueGame = async()=>{
+  // continue (after success)
+  const continueGame = async () => {
     setShowModal(false);
     const prog = await wsGetProgress();
-    if(prog.error) return navigate("/");
+    if (prog.error) return navigate('/');
     setLevelId(prog.levelId);
     setState(prog.state);
     setMoves(prog.moves);
@@ -159,17 +186,12 @@ export default function GamePage() {
   return (
     <div className="h-[100dvh] w-full flex flex-col justify-start bg-animated-photo px-4 py-6 overflow-hidden">
       <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
+
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={()=>navigate("/")}
-            className="bg-gray-700 px-3 py-1.5 rounded-full text-sm"
-          >
-            &larr; Main
-          </button>
+          <button onClick={() => navigate('/')} className="bg-gray-700 px-3 py-1.5 rounded-full text-sm">← Main</button>
           <div className="bg-gray-700 px-3 py-1.5 rounded-full text-sm flex items-center space-x-1">
-            <span className="font-semibold">{coins}</span>
-            <span className="text-yellow-400">🪙</span>
+            <span className="font-semibold">{coins}</span> <span className="text-yellow-400">🪙</span>
           </div>
         </div>
 
@@ -177,25 +199,17 @@ export default function GamePage() {
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
 
-          {/* показываем Moves и две кнопки */}
+          {/* AI + Moves row */}
           <div className="relative w-full mb-4 flex items-center justify-center">
             <div className="absolute left-0 flex flex-col items-center">
-              <button
-                disabled
-                className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
-              >
+              <button onClick={handleSolve} disabled={isSolving} className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl ${isSolving ? 'bg-gray-600 opacity-60 cursor-not-allowed' : 'bg-gray-700 hover:bg-gray-600'}`}>
                 🤖
               </button>
               <span className="text-xs text-gray-400 mt-1">100</span>
             </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
             <div className="absolute right-0 flex flex-col items-center">
-              <button
-                disabled
-                className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
-              >
-                ❓
-              </button>
+              <button disabled className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed">❓</button>
               <span className="text-xs text-gray-400 mt-1">10</span>
             </div>
           </div>
@@ -203,32 +217,20 @@ export default function GamePage() {
           {/* TUBES */}
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
-              {topRow.map((tube,i)=>(
-                <Tube key={i} tube={tube} index={i}
-                      onClick={clickTube} selected={selected===i}/>
-              ))}
+              {topRow.map((tube,i) => <Tube key={i} tube={tube} index={i} onClick={clickTube} selected={selected===i}/>)}
             </div>
             {bottomRow.length>0 && (
               <div className="flex justify-center gap-4">
-                {bottomRow.map((tube,i)=>(
-                  <Tube key={i+4} tube={tube} index={i+4}
-                        onClick={clickTube} selected={selected===i+4}/>
-                ))}
+                {bottomRow.map((tube,i) => <Tube key={i+4} tube={tube} index={i+4} onClick={clickTube} selected={selected===i+4}/>)}
               </div>
             )}
           </div>
 
-          {/* RESET BUTTON */}
-          <button
-            onClick={resetLevel}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
-          >
-            Reset Level
-          </button>
         </div>
 
-        {/* MODAL */}
-        {showModal && (
+        {/* MODALS */}
+        {/* Success */}
+        {showModal && modalType === 'success' && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 animate-modal-celebrate">
               <h3 className="text-lg font-bold">{modalMessage}</h3>
@@ -236,22 +238,24 @@ export default function GamePage() {
                 +{modalReward} 🪙
               </div>
               <div className="flex space-x-4">
-                <button
-                  className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
-                  onClick={()=>navigate("/")}
-                >
-                  Main
-                </button>
-                <button
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
-                  onClick={continueGame}
-                >
-                  Continue
-                </button>
+                <button className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold" onClick={() => navigate('/')}>Main</button>
+                <button className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition" onClick={continueGame}>Continue</button>
               </div>
             </div>
           </div>
         )}
+
+        {/* Fail */}
+        {showModal && modalType === 'fail' && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
+            <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
+              <button onClick={() => closeEnabled && setShowModal(false)} disabled={!closeEnabled} className={`absolute top-2 left-2 text-white text-xl ${!closeEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}>×</button>
+              <h3 className="text-lg font-bold mb-4">{modalMessage}</h3>
+              <button onClick={resetLevel} className="mt-4 w-full bg-red-600 hover:bg-red-500 py-2 rounded-full font-semibold">Reset Level</button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
