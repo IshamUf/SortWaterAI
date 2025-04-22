@@ -1,5 +1,4 @@
 // src/pages/GamePage.jsx
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -43,7 +42,7 @@ const isSolved = (state) =>
   );
 /* --------------------------- */
 
-/* Tube UI */
+/* ---------- Tube UI ---------- */
 const colorMap = [
   "bg-[#8CB4C9]","bg-[#C9ADA7]","bg-[#B5CDA3]","bg-[#E0C097]",
   "bg-[#A9A9B3]","bg-[#DAB6C4]","bg-[#A1C6EA]","bg-[#BFCBA8]"
@@ -72,7 +71,7 @@ const Tube = ({ tube, index, onClick, selected }) => (
     </div>
   </div>
 );
-/* --------------------------- */
+/* -------------------------------- */
 
 export default function GamePage() {
   const navigate = useNavigate();
@@ -116,7 +115,7 @@ export default function GamePage() {
     if (!canPour(state[selected], state[idx])) return setSelected(null);
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
-    const optimistic = deepClone(state);
+    const optimistic = [...state];
     optimistic[selected] = newSource;
     optimistic[idx] = newTarget;
     setState(optimistic);
@@ -170,47 +169,26 @@ export default function GamePage() {
         {/* FIELD */}
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
-
-          {/* Moves + side buttons */}
-          <div className="relative w-full mb-4 h-14">
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center">
-              <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl">
-                🤖
-              </button>
-              <span className="text-xs mt-1 text-white">100</span>
-            </div>
-            <h2 className="text-xl font-bold text-center">Moves: {moves}</h2>
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center">
-              <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl">
-                ❓
-              </button>
-              <span className="text-xs mt-1 text-white">10</span>
-            </div>
+          <div className="flex items-center justify-between w-full px-4 mb-4">
+            <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed">
+              🤖
+            </button>
+            <h2 className="text-xl font-bold">Moves: {moves}</h2>
+            <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed">
+              ❓
+            </button>
           </div>
 
-          {/* Tubes */}
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
               {topRow.map((tube, i) => (
-                <Tube
-                  key={i}
-                  tube={tube}
-                  index={i}
-                  onClick={clickTube}
-                  selected={selected === i}
-                />
+                <Tube key={i} tube={tube} index={i} onClick={clickTube} selected={selected === i}/>
               ))}
             </div>
             {bottomRow.length > 0 && (
               <div className="flex justify-center gap-4">
                 {bottomRow.map((tube, i) => (
-                  <Tube
-                    key={i + 4}
-                    tube={tube}
-                    index={i + 4}
-                    onClick={clickTube}
-                    selected={selected === i + 4}
-                  />
+                  <Tube key={i+4} tube={tube} index={i+4} onClick={clickTube} selected={selected === i+4}/>
                 ))}
               </div>
             )}
@@ -229,19 +207,18 @@ export default function GamePage() {
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
               <h3 className="text-lg font-bold">Level completed!</h3>
-              <div className="inline-flex items-center bg-gray-700 px-3 py-1.5 rounded-full mx-auto">
-                <span className="font-semibold text-white">+10</span>
-                <span className="text-gray-300 ml-1">🪙</span>
+              <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
+                +10 🪙
               </div>
-              <div className="flex justify-between mt-4">
+              <div className="flex space-x-4">
                 <button
-                  className="bg-gray-700 px-4 py-2 rounded-xl text-xl font-bold shadow-md"
+                  className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
                   onClick={() => navigate("/")}
                 >
                   Main
                 </button>
                 <button
-                  className="bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-2 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
                   onClick={continueGame}
                 >
                   Continue
