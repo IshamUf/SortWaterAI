@@ -6,6 +6,7 @@ import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 import { fn, col, literal } from "sequelize";
 
 const AI_FUNC_URL = process.env.AI_FUNC_URL;
+
 /**
  * Из args достаёт последний аргумент, если это функция (ack).
  */
@@ -38,6 +39,7 @@ export default function registerHandlers(socket) {
       ack({ error: "internal" });
     }
   });
+
   // ——— User:daily —————————————————————————————
   socket.on("user:daily", async (...args) => {
     const ack = extractAck(args);
@@ -258,15 +260,11 @@ export default function registerHandlers(socket) {
           scoreKey = "🥉";
         }
 
-        // Обновляем монеты
+        // Обновляем монеты и счёт
         socket.user.coins += reward;
-
-        // Инкрементируем соответствующий счётчик в score
         const newScore = { ...socket.user.score };
         newScore[scoreKey] = (newScore[scoreKey] || 0) + 1;
         socket.user.score = newScore;
-
-        // Сохраняем пользователя
         await socket.user.save();
 
         // Возвращаем клиенту результат
@@ -289,6 +287,7 @@ export default function registerHandlers(socket) {
     }
   });
 
+  // ——— Progress:solve —————————————————————————
   socket.on("progress:solve", async (...args) => {
     const ack     = extractAck(args);
     const payload = extractPayload(args);
@@ -311,30 +310,41 @@ export default function registerHandlers(socket) {
       const data = response.data;
       console.log("AI response:", data);
 
-      // если AI нашёл решение — отметим Progress.completed + solvedByAI
-      if (data.solvable) {
-        // находим текущий прогресс
-        const p = await Progress.findOne({
-          where: { userId: socket.user.id, levelId }
-        });
-        if (p) {
-          p.status     = "completed";
-          p.solvedByAI = true;
-          await p.save();
+      // если AI не решил — просто вернём ответ, монеты не трогаем
+      if (!data.solvable) {
+        return ack(data);
+      }
 
-          // создаём прогресс для следующего уровня
-          const nextLevel = await Level.findByPk(levelId + 1);
-          if (nextLevel) {
-            const { state: nxtState } = JSON.parse(nextLevel.level_data);
-            await Progress.findOrCreate({
-              where:    { userId: socket.user.id, levelId: nextLevel.id },
-              defaults: { state: nxtState, status: "in_progress", moves: 0 }
-            });
-          }
+      // только при solvable === true вычитаем 100 монет
+      const cost = 100;
+      if (socket.user.coins < cost) {
+        return ack({ error: "insufficient_coins" });
+      }
+      socket.user.coins -= cost;
+      await socket.user.save();
+
+      // отмечаем уровень завершённым AI
+      const p = await Progress.findOne({
+        where: { userId: socket.user.id, levelId }
+      });
+      if (p) {
+        p.status     = "completed";
+        p.solvedByAI = true;
+        await p.save();
+
+        // создаём прогресс для следующего уровня
+        const nextLevel = await Level.findByPk(levelId + 1);
+        if (nextLevel) {
+          const { state: nxtState } = JSON.parse(nextLevel.level_data);
+          await Progress.findOrCreate({
+            where:    { userId: socket.user.id, levelId: nextLevel.id },
+            defaults: { state: nxtState, status: "in_progress", moves: 0 }
+          });
         }
       }
 
-      // возвращаем ответ клиенту
+      // возвращаем ответ клиенту вместе с обновлёнными монетами
+      data.coins = socket.user.coins;
       return ack(data);
     } catch (err) {
       console.error("progress:solve error", err);

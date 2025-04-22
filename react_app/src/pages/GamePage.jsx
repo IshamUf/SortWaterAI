@@ -1,5 +1,4 @@
 // src/pages/GamePage.jsx
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
@@ -46,7 +45,7 @@ const colorMap = [
 ];
 const getColorBlock = (c, idx, tube) => {
   const base    = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
-  const rounded = (idx===tube.length-1||tube[idx+1]===-1) ? "rounded-b-full" : "";
+  const rounded = (idx===tube.length-1||tube[idx+1]===-1)? "rounded-b-full":"";
   return `${base} ${colorMap[c]||"bg-transparent"} ${rounded} opacity-90`;
 };
 const Tube = ({ tube, index, onClick, selected, disabled }) => (
@@ -269,7 +268,7 @@ export default function GamePage() {
                     : "bg-gray-700 hover:bg-gray-600"
                 }`}
               >🤖</button>
-              <span className="text-xs text-gray-400 mt-1">100</span>
+              <span className="text-base font-bold text-gray-400 mt-1">100</span>
             </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
             <div className="absolute right-0 flex flex-col items-center">
@@ -277,7 +276,7 @@ export default function GamePage() {
                 disabled
                 className="w-14 h-14 rounded-full bg-gray-700 opacity-60 cursor-not-allowed flex items-center justify-center text-2xl"
               >❓</button>
-              <span className="text-xs text-gray-400 mt-1">10</span>
+              <span className="text-base font-bold text-gray-400 mt-1">10</span>
             </div>
           </div>
 
