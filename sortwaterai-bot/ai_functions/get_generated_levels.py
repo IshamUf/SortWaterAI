@@ -7,8 +7,8 @@ from typing import List, Dict
 import numpy as np
 import torch
 
-from water_sort_env import WaterSortEnvFixed, DiscreteActionWrapper
-from dqn_agent    import MaskedDQNAgent
+from ai_functions.water_sort_env import WaterSortEnvFixed, DiscreteActionWrapper
+from ai_functions.dqn_agent       import MaskedDQNAgent
 
 def get_generated_levels(model: str, count: int) -> List[Dict]:
     """

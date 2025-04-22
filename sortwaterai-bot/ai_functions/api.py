@@ -7,6 +7,7 @@ from typing import List, Dict, Any
 from ai_functions.solver import solve_level
 from ai_functions.add_ai_level import run_ingest
 
+
 app = FastAPI(
     title="SortWaterAI AI Functions",
     version="1.0",
