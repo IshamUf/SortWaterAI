@@ -289,7 +289,7 @@ export default function GamePage() {
               <h2 className="text-xl font-bold">Moves: {moves}</h2>
               {hintStep && (
                 <div className="text-sm text-gray-200 mt-1">
-                  🤖: I recommend pouring from {hintStep[0]} to {hintStep[1]}
+                  🤖: I recommend pouring from {hintStep[0]+1} to {hintStep[1]+1}
                 </div>
               )}
             </div>
