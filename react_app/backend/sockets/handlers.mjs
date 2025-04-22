@@ -283,28 +283,53 @@ export default function registerHandlers(socket) {
     }
   });
 
-  // ——— Progress:solve —————————————————————————
   socket.on("progress:solve", async (...args) => {
-    const ack = extractAck(args);
+    const ack     = extractAck(args);
     const payload = extractPayload(args);
     try {
       if (!ack) return;
       const { levelId, state, user_moves } = payload ?? {};
       if (
-        typeof levelId !== "number" ||
+        typeof levelId   !== "number" ||
         !Array.isArray(state) ||
         typeof user_moves !== "number"
       ) {
         return ack({ error: "invalid_payload" });
       }
+
       // вызываем AI‑микросервис
       const response = await axios.post(
         `${AI_FUNC_URL}/solve_level`,
         { level_id: levelId, state, user_moves }
       );
-      console.log("AI response:", response.data);
-      // возвращаем результат клиенту
-      return ack(response.data);
+      const data = response.data;
+      console.log("AI response:", data);
+
+      // если AI нашёл решение — отметим Progress.completed + solvedByAI
+      if (data.solvable) {
+        // находим текущий прогресс
+        const p = await Progress.findOne({
+          where: { userId: socket.user.id, levelId }
+        });
+        if (p) {
+          p.status     = "completed";
+          p.solvedByAI = true;
+          await p.save();
+
+          // создаём прогресс для следующего уровня
+          const nextLevel = await Level.findByPk(levelId + 1);
+          if (nextLevel) {
+            const { state: nxtState } = JSON.parse(nextLevel.level_data);
+            await Progress.findOrCreate({
+              where:    { userId: socket.user.id, levelId: nextLevel.id },
+              defaults: { state: nxtState, status: "in_progress", moves: 0 }
+            });
+          }
+        }
+      }
+
+      // возвращаем ответ клиенту
+      return ack(data);
     } catch (err) {
       console.error("progress:solve error", err);
       return ack({ error: "internal" });
