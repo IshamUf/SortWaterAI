@@ -199,84 +199,90 @@ export default function registerHandlers(socket) {
     try {
       if (!ack) return;
       const { levelId, from, to } = payload ?? {};
-      if (
-        typeof levelId !== "number" ||
-        typeof from    !== "number" ||
-        typeof to      !== "number"
-      ) {
+      if (typeof levelId !== "number" || typeof from !== "number" || typeof to !== "number") {
         return ack({ error: "invalid_payload" });
       }
 
-      const p = await Progress.findOne({
-        where: { userId: socket.user.id, levelId }
-      });
+      // Загружаем прогресс
+      const p = await Progress.findOne({ where: { userId: socket.user.id, levelId } });
       if (!p) return ack({ error: "no_progress" });
       if (p.status === "completed") return ack({ error: "completed" });
 
+      // Проверяем ход
       const cur = p.state;
-      if (
-        !Array.isArray(cur) ||
-        from < 0 || from >= cur.length ||
-        to   < 0 || to   >= cur.length ||
-        !canPour(cur[from], cur[to])
-      ) {
+      if (!Array.isArray(cur) || !canPour(cur[from], cur[to])) {
         return ack({ error: "illegal" });
       }
 
+      // Применяем ход
       const { newSource, newTarget } = pour(cur[from], cur[to]);
       const next = [...cur];
       next[from] = newSource;
       next[to]   = newTarget;
 
+      // Обновляем прогресс
       p.state  = next;
       p.moves += 1;
       p.status = isSolved(next) ? "completed" : "in_progress";
       await p.save();
 
-      // подготовка следующего уровня
+      // Если уровень завершён пользователем
       if (p.status === "completed") {
-        const nxt = await Level.findByPk(p.levelId + 1);
-        if (nxt) {
-          const { state: nxtState } = JSON.parse(nxt.level_data);
+        // Подготовим следующий уровень
+        const nextLevel = await Level.findByPk(levelId + 1);
+        if (nextLevel) {
+          const nxtState = JSON.parse(nextLevel.level_data).state;
           await Progress.findOrCreate({
-            where:    { userId: socket.user.id, levelId: nxt.id },
+            where:    { userId: socket.user.id, levelId: nextLevel.id },
             defaults: { state: nxtState, status: "in_progress", moves: 0 },
           });
         }
-      }
 
-      // Собираем результат и награду
-      const result = {
-        state:  p.state,
-        status: p.status,
-        moves:  p.moves,
-      };
-      if (p.status === "completed") {
-        const lvl = await Level.findByPk(levelId);
+        // Вычисляем награду
+        const lvl       = await Level.findByPk(levelId);
         const aiSteps   = lvl.ai_steps ?? 0;
         const userSteps = p.moves;
-        let reward, message;
+        let reward, message, scoreKey;
 
         if (userSteps < aiSteps) {
-          reward  = 3;
-          message = "Wow, you beat the AI!";
+          reward   = 3;
+          message  = "Wow, you beat the AI!";
+          scoreKey = "🏆";
         } else if (userSteps === aiSteps) {
-          reward  = 2;
-          message = "Level completed!";
+          reward   = 2;
+          message  = "Level completed!";
+          scoreKey = "🎖️";
         } else {
-          reward  = 1;
-          message = "Level completed!";
+          reward   = 1;
+          message  = "Level completed!";
+          scoreKey = "🥉";
         }
 
+        // Обновляем монеты
         socket.user.coins += reward;
+
+        // Инкрементируем соответствующий счётчик в score
+        const newScore = { ...socket.user.score };
+        newScore[scoreKey] = (newScore[scoreKey] || 0) + 1;
+        socket.user.score = newScore;
+
+        // Сохраняем пользователя
         await socket.user.save();
 
-        result.reward  = reward;
-        result.message = message;
-        result.coins   = socket.user.coins;
+        // Возвращаем клиенту результат
+        return ack({
+          state:  p.state,
+          status: p.status,
+          moves:  p.moves,
+          reward,
+          message,
+          coins: socket.user.coins,
+          score: socket.user.score
+        });
       }
 
-      ack(result);
+      // если не завершён — просто возвращаем состояние
+      ack({ state: p.state, status: p.status, moves: p.moves });
     } catch (err) {
       console.error("progress:move error", err);
       ack({ error: "internal" });
