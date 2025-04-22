@@ -227,20 +227,24 @@ export default function GamePage() {
         {/* MODAL */}
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center">
-              <h3 className="text-lg font-bold mb-4">Level completed!</h3>
-              <div className="flex flex-col space-y-3">
-                <button
-                  className="bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
-                  onClick={continueGame}
-                >
-                  Continue
-                </button>
+            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
+              <h3 className="text-lg font-bold">Level completed!</h3>
+              <div className="inline-flex items-center bg-gray-700 px-3 py-1.5 rounded-full mx-auto">
+                <span className="font-semibold text-white">+10</span>
+                <span className="text-gray-300 ml-1">🪙</span>
+              </div>
+              <div className="flex justify-between mt-4">
                 <button
                   className="bg-gray-700 px-4 py-2 rounded"
                   onClick={() => navigate("/")}
                 >
                   Main
+                </button>
+                <button
+                  className="bg-gradient-to-r from-blue-600 to-blue-800 px-4 py-2 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
+                  onClick={continueGame}
+                >
+                  Continue
                 </button>
               </div>
             </div>
