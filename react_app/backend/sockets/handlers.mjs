@@ -1,9 +1,11 @@
+import axios from "axios";
 import Progress from "../models/Progress.mjs";
 import Level    from "../models/Level.mjs";
 import User     from "../models/User.mjs";
 import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 import { fn, col, literal } from "sequelize";
 
+const AI_FUNC_URL = process.env.AI_FUNC_URL;
 /**
  * Из args достаёт последний аргумент, если это функция (ack).
  */
@@ -281,9 +283,31 @@ export default function registerHandlers(socket) {
     }
   });
 
-  // ——— Progress:solve (stub) —————————————————————————
-  socket.on("progress:solve", (payload, ack) => {
-    return ack({ solvable: false, ai_steps: 0, solution: [] });
+  // ——— Progress:solve —————————————————————————
+  socket.on("progress:solve", async (...args) => {
+    const ack = extractAck(args);
+    const payload = extractPayload(args);
+    try {
+      if (!ack) return;
+      const { levelId, state, user_moves } = payload ?? {};
+      if (
+        typeof levelId !== "number" ||
+        !Array.isArray(state) ||
+        typeof user_moves !== "number"
+      ) {
+        return ack({ error: "invalid_payload" });
+      }
+      // вызываем AI‑микросервис
+      const response = await axios.post(
+        `${AI_FUNC_URL}/solve_level`,
+        { level_id: levelId, state, user_moves }
+      );
+      console.log("AI response:", response.data);
+      // возвращаем результат клиенту
+      return ack(response.data);
+    } catch (err) {
+      console.error("progress:solve error", err);
+      return ack({ error: "internal" });
+    }
   });
-
 }
