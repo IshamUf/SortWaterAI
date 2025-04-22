@@ -135,7 +135,7 @@ export default function GamePage() {
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
     optimistic[selected] = newSource;
-    optimistic[idx] = newTarget;
+    optimistic[idx]      = newTarget;
     setState(optimistic);
 
     const from = selected, to = idx;
@@ -229,7 +229,7 @@ export default function GamePage() {
     setMoves(prog.moves);
   };
 
-  // decide medal emoji based on reward
+  // medal emoji by reward
   const medalEmoji = modalReward === 3
     ? "🏆"
     : modalReward === 2
@@ -268,9 +268,7 @@ export default function GamePage() {
                     ? "bg-gray-600 opacity-60 cursor-not-allowed"
                     : "bg-gray-700 hover:bg-gray-600"
                 }`}
-              >
-                🤖
-              </button>
+              >🤖</button>
               <span className="text-xs text-gray-400 mt-1">100</span>
             </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
@@ -278,9 +276,7 @@ export default function GamePage() {
               <button
                 disabled
                 className="w-14 h-14 rounded-full bg-gray-700 opacity-60 cursor-not-allowed flex items-center justify-center text-2xl"
-              >
-                ❓
-              </button>
+              >❓</button>
               <span className="text-xs text-gray-400 mt-1">10</span>
             </div>
           </div>
@@ -323,9 +319,7 @@ export default function GamePage() {
           className={`w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md transition ${
             isAnimating ? "opacity-60 cursor-not-allowed text-white" : "hover:scale-95 text-white"
           }`}
-        >
-          Reset Level
-        </button>
+        >Reset Level</button>
       </div>
 
       {/* MODAL */}
@@ -340,9 +334,7 @@ export default function GamePage() {
                 className={`absolute top-2 left-2 text-white text-xl ${
                   !closeEnabled ? "opacity-40 cursor-not-allowed" : ""
                 }`}
-              >
-                ×
-              </button>
+              >×</button>
             )}
 
             {/* AI icon */}
@@ -351,31 +343,26 @@ export default function GamePage() {
 
             {modalType === "success" && (
               <>
-                {/* two reward pills */}
-                <div className="flex justify-center space-x-2">
-                  {/* coins pill */}
-                  <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
-                    +{modalReward} 🪙
+                {/* only user reward pills when modalReward>0 */}
+                {modalReward > 0 && (
+                  <div className="flex justify-center space-x-2">
+                    <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
+                      +{modalReward} 🪙
+                    </div>
+                    <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
+                      <span className="text-yellow-400">+</span> {medalEmoji}
+                    </div>
                   </div>
-                  {/* medal pill */}
-                  <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
-                    <span className="text-yellow-400">+</span> {medalEmoji}
-                  </div>
-                </div>
-                {/* action buttons */}
+                )}
                 <div className="flex space-x-4">
                   <button
                     className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold text-white"
-                    onClick={()=>navigate("/")}
-                  >
-                    Main
-                  </button>
+                    onClick={() => navigate("/")}
+                  >Main</button>
                   <button
                     className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold text-white shadow-md hover:scale-95 transition"
                     onClick={continueGame}
-                  >
-                    Continue
-                  </button>
+                  >Continue</button>
                 </div>
               </>
             )}
@@ -384,9 +371,7 @@ export default function GamePage() {
               <button
                 onClick={resetLevel}
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold text-white shadow-md hover:scale-95 transition"
-              >
-                Reset Level
-              </button>
+              >Reset Level</button>
             )}
           </div>
         </div>
