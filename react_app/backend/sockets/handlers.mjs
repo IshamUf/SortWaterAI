@@ -30,14 +30,14 @@ export default function registerHandlers(socket) {
     const ack = extractAck(args);
     try {
       if (!ack) return;
-      const { id, username, coins } = socket.user;
-      ack({ id, username, coins });
+      const { id, username, coins, score } = socket.user;
+      // score — это JSONB‑поле в модели User
+      ack({ id, username, coins, score });
     } catch (err) {
       console.error("user:get error", err);
       ack({ error: "internal" });
     }
   });
-
   // ——— User:daily —————————————————————————————
   socket.on("user:daily", async (...args) => {
     const ack = extractAck(args);
