@@ -1,4 +1,3 @@
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
@@ -22,13 +21,9 @@ const pour      = (src, dst) => {
   const A = [...src], B = [...dst];
   let f = findTop(A), color = A[f], cnt = 1;
   for (let i = f+1; i < A.length && A[i]===color; i++) cnt++;
-  let t = findTop(B); t = t===-1 ? B.length-1 : t-1;
-  while (cnt>0 && t>=0 && B[t]===-1) {
-    B[t] = color;
-    A[f] = -1;
-    f++;
-    t--;
-    cnt--;
+  let t = findTop(B); t = t===-1?B.length-1:t-1;
+  while(cnt>0 && t>=0 && B[t]===-1){
+    B[t]=color; A[f]=-1; f++; t--; cnt--;
   }
   return { newSource: A, newTarget: B };
 };
@@ -122,14 +117,8 @@ export default function GamePage() {
       if (state[idx][state[idx].length - 1] !== -1) setSelected(idx);
       return;
     }
-    if (selected === idx) {
-      setSelected(null);
-      return;
-    }
-    if (!canPour(state[selected], state[idx])) {
-      setSelected(null);
-      return;
-    }
+    if (selected === idx) { setSelected(null); return; }
+    if (!canPour(state[selected], state[idx])) { setSelected(null); return; }
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
@@ -198,6 +187,8 @@ export default function GamePage() {
       setCloseEnabled(false);
       setTimeout(() => setCloseEnabled(true), 1000);
     } else {
+      // immediately reflect deduction of 100 coins
+      setCoins(resp.coins);
       animateSolution(resp.solution, resp.ai_steps);
     }
   };
@@ -228,22 +219,12 @@ export default function GamePage() {
     setMoves(prog.moves);
   };
 
-  // medal emoji by reward
-  const medalEmoji = modalReward === 3
-    ? "🏆"
-    : modalReward === 2
-      ? "🎖️"
-      : "🥉";
-
   return (
     <div className="h-[100dvh] w-full flex flex-col justify-start bg-animated-photo px-4 py-6 overflow-hidden">
       <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
-          <button
-            onClick={() => navigate("/")}
-            className="bg-gray-700 px-3 py-1.5 rounded-full text-sm text-white"
-          >
+          <button onClick={()=>navigate("/")} className="bg-gray-700 px-3 py-1.5 rounded-full text-sm text-white">
             &larr; Main
           </button>
           <div className="bg-gray-700 px-3 py-1.5 rounded-full text-sm flex items-center space-x-1 text-white">
@@ -268,15 +249,14 @@ export default function GamePage() {
                     : "bg-gray-700 hover:bg-gray-600"
                 }`}
               >🤖</button>
-              <span className="text-base font-bold text-gray-400 mt-1">100</span>
+              <span className="text-lg font-bold mt-1">100</span>
             </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
             <div className="absolute right-0 flex flex-col items-center">
-              <button
-                disabled
-                className="w-14 h-14 rounded-full bg-gray-700 opacity-60 cursor-not-allowed flex items-center justify-center text-2xl"
-              >❓</button>
-              <span className="text-base font-bold text-gray-400 mt-1">10</span>
+              <button disabled className="w-14 h-14 rounded-full bg-gray-700 opacity-60 cursor-not-allowed flex items-center justify-center text-2xl">
+                ❓
+              </button>
+              <span className="text-lg font-bold mt-1">10</span>
             </div>
           </div>
 
@@ -342,14 +322,13 @@ export default function GamePage() {
 
             {modalType === "success" && (
               <>
-                {/* only user reward pills when modalReward>0 */}
                 {modalReward > 0 && (
                   <div className="flex justify-center space-x-2">
                     <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
                       +{modalReward} 🪙
                     </div>
                     <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
-                      <span className="text-yellow-400">+</span> {medalEmoji}
+                      <span className="text-yellow-400">+</span> {modalReward === 3 ? '🏆' : modalReward === 2 ? '🎖️' : '🥉'}
                     </div>
                   </div>
                 )}
