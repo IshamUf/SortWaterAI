@@ -281,4 +281,9 @@ export default function registerHandlers(socket) {
     }
   });
 
+  // ——— Progress:solve (stub) —————————————————————————
+  socket.on("progress:solve", (payload, ack) => {
+    return ack({ solvable: false, ai_steps: 0, solution: [] });
+  });
+
 }

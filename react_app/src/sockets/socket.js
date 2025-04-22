@@ -31,4 +31,6 @@ export const wsGetProgress = ()         => req("progress:get", null);
 export const wsStart       = (p)        => req("progress:start", p);
 export const wsMove        = (p)        => req("progress:move", p);
 
+export const wsSolveLevel = (p) => req("progress:solve", p);
+
 export default socket;
