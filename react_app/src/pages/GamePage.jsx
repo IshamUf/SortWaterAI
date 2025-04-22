@@ -93,7 +93,7 @@ export default function GamePage() {
     })();
   },[]);
 
-  // confetti on user success or AI success
+  // confetti on success
   useEffect(()=>{
     if(showModal && modalType==="success"){
       confetti({ particleCount:100, spread:60, origin:{x:0.5,y:0.7} });
@@ -138,7 +138,6 @@ export default function GamePage() {
     setState(resp.state);
     setMoves(resp.moves);
     if(resp.status==="completed"){
-      // user victory
       setModalType("success");
       setModalMsg(resp.message);
       setModalReward(resp.reward);
@@ -160,16 +159,15 @@ export default function GamePage() {
       return;
     }
     if(!resp.solvable){
-      // AI cannot solve
       setModalType("fail");
       setModalMsg("Sorry, I can’t solve this configuration.");
       setModalReward(0);
       setShowModal(true);
       setCloseEnabled(false);
-      setIsAiModal(false);
+      setIsAiModal(true);
       setTimeout(()=>setCloseEnabled(true), 1000);
     } else {
-      // AI solved: create next level progress immediately
+      // advance to next level immediately
       await wsStart({ levelId: levelId + 1 });
       setModalType("success");
       setModalMsg(`I solved this in ${resp.ai_steps} steps`);
@@ -189,7 +187,7 @@ export default function GamePage() {
     setShowModal(false);
   };
 
-  // close modal (only for failure or after enable)
+  // close modal (fail only)
   const closeModal = () => {
     if(!closeEnabled) return;
     setShowModal(false);
@@ -198,7 +196,6 @@ export default function GamePage() {
   // continue after modal
   const continueGame = async () => {
     setShowModal(false);
-    // reload in-progress (user or AI) to get current level
     const prog = await wsGetProgress();
     if(prog.error) return navigate("/");
     setLevelId(prog.levelId);
@@ -277,7 +274,8 @@ export default function GamePage() {
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
-              {/* close for failure only */}
+
+              {/* only fail: close × */}
               {modalType === "fail" && (
                 <button
                   onClick={closeModal}
@@ -290,13 +288,20 @@ export default function GamePage() {
                 </button>
               )}
 
+              {/* emoji for AI modals */}
+              {isAiModal && <div className="text-4xl">🤖</div>}
+
               <h3 className="text-lg font-bold">{modalMsg}</h3>
 
+              {/* success: both user & AI */}
               {modalType === "success" && (
                 <>
-                  <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
-                    +{modalReward} 🪙
-                  </div>
+                  {/* badge only for user wins */}
+                  {!isAiModal && (
+                    <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
+                      +{modalReward} 🪙
+                    </div>
+                  )}
                   <div className="flex space-x-4">
                     <button
                       className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
@@ -314,10 +319,11 @@ export default function GamePage() {
                 </>
               )}
 
+              {/* fail: only Reset */}
               {modalType === "fail" && (
                 <button
                   onClick={resetLevel}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl	font-bold shadow-md hover:scale-95 transition"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
                 >
                   Reset Level
                 </button>
