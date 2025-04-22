@@ -22,13 +22,8 @@ services:
       context: ./react_app
       dockerfile: Dockerfile
     container_name: sortwater_react_app
-    environment:
-      - PGHOST=postgres
-      - PGUSER=postgres
-      - PGPASSWORD=postgres
-      - PGDATABASE=sortwater
-      - REDIS_URL=redis://redis:6379
-      - NODE_ENV=production
+    env_file:
+      - ./react_app/backend/.env
     depends_on:
       - postgres
       - redis
