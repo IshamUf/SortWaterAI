@@ -1,6 +1,8 @@
+/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 @layer utilities {
   /* Плавная «качалка» фона влево‑вправо */
   @keyframes bgSlideX {
@@ -15,5 +17,15 @@
     background-repeat: no-repeat;
     background-position: 50% 50%;
     animation: bgSlideX 40s ease-in-out infinite;
+  }
+
+  /* «Салютная» анимация для модалки */
+  @keyframes modalCelebrate {
+    0%   { transform: scale(0.7); opacity: 0; }
+    60%  { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .animate-modal-celebrate {
+    animation: modalCelebrate 0.5s ease-out;
   }
 }

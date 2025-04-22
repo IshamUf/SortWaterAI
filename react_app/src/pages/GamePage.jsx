@@ -1,4 +1,5 @@
 // src/pages/GamePage.jsx
+// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -26,11 +27,7 @@ const pour = (src, dst) => {
   let t = findTop(B);
   t = t === -1 ? B.length - 1 : t - 1;
   while (cnt && t >= 0 && B[t] === -1) {
-    B[t] = color;
-    A[f] = -1;
-    f++;
-    t--;
-    cnt--;
+    B[t] = color; A[f] = -1; f++; t--; cnt--;
   }
   return { newSource: A, newTarget: B };
 };
@@ -44,8 +41,8 @@ const isSolved = (state) =>
 
 /* ---------- Tube UI ---------- */
 const colorMap = [
-  "bg-[#8CB4C9]","bg-[#C9ADA7]","bg-[#B5CDA3]","bg-[#E0C097]",
-  "bg-[#A9A9B3]","bg-[#DAB6C4]","bg-[#A1C6EA]","bg-[#BFCBA8]"
+  "bg-[#8CB4C9]", "bg-[#C9ADA7]", "bg-[#B5CDA3]", "bg-[#E0C097]",
+  "bg-[#A9A9B3]", "bg-[#DAB6C4]", "bg-[#A1C6EA]", "bg-[#BFCBA8]"
 ];
 const getColorBlock = (c, idx, tube) => {
   const base = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
@@ -115,12 +112,11 @@ export default function GamePage() {
     if (!canPour(state[selected], state[idx])) return setSelected(null);
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
-    const optimistic = [...state];
+    const optimistic = deepClone(state);
     optimistic[selected] = newSource;
     optimistic[idx] = newTarget;
     setState(optimistic);
-    const from = selected;
-    const to = idx;
+    const from = selected, to = idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
@@ -182,13 +178,25 @@ export default function GamePage() {
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
               {topRow.map((tube, i) => (
-                <Tube key={i} tube={tube} index={i} onClick={clickTube} selected={selected === i}/>
+                <Tube
+                  key={i}
+                  tube={tube}
+                  index={i}
+                  onClick={clickTube}
+                  selected={selected === i}
+                />
               ))}
             </div>
             {bottomRow.length > 0 && (
               <div className="flex justify-center gap-4">
                 {bottomRow.map((tube, i) => (
-                  <Tube key={i+4} tube={tube} index={i+4} onClick={clickTube} selected={selected === i+4}/>
+                  <Tube
+                    key={i + 4}
+                    tube={tube}
+                    index={i + 4}
+                    onClick={clickTube}
+                    selected={selected === i + 4}
+                  />
                 ))}
               </div>
             )}
@@ -205,7 +213,7 @@ export default function GamePage() {
         {/* MODAL */}
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
+            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 animate-modal-celebrate">
               <h3 className="text-lg font-bold">Level completed!</h3>
               <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
                 +10 🪙
