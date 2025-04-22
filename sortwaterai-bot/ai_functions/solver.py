@@ -68,6 +68,7 @@ def load_agent(
     )
     agent.load_state_dict(torch.load(model_path, map_location=device))
     agent.eval()
+    agent.epsilon = 0
     return agent
 
 def solve_with_agent(

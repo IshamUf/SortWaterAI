@@ -54,7 +54,7 @@ def get_generated_levels(model: str, count: int) -> List[Dict]:
     )
     agent.load_state_dict(torch.load(model_path, map_location=device))
     agent.eval()
-
+    agent.epsilon = 0
 
     results = []
     seen = set()
