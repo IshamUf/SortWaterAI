@@ -49,15 +49,15 @@ const Tube = ({ tube, index, onClick, selected, disabled }) => (
   <div
     onClick={() => !disabled && onClick(index)}
     className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch ${
-      disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer"
-    } ${selected ? "border-blue-400" : "border-[#3B3F45]"} bg-transparent overflow-hidden`}
+      selected ? "border-blue-400" : "border-[#3B3F45]"
+    } bg-transparent overflow-hidden`}
   >
     <div className="flex flex-col justify-end pt-2 h-full">
       {tube.map((cell,i)=>(
         <div
           key={i}
           className={`flex-1 mx-[2px] ${
-            cell===-1? "opacity-0": getColorBlock(cell,i,tube)
+            cell===-1 ? "opacity-0" : getColorBlock(cell,i,tube)
           }`}
         />
       ))}
@@ -161,10 +161,12 @@ export default function GamePage() {
       current = next;
       await new Promise(r => setTimeout(r, 1000));
     }
+    // create next level in backend
+    await wsStart({ levelId: levelId + 1 });
     setIsAnimating(false);
-    // after animation, show modal
+    // show AI‐success modal
     setModalType("success");
-    setModalMsg("Solved by AI");
+    setModalMsg("🤖 Solved by AI");
     setModalReward(0);
     setShowModal(true);
     setCloseEnabled(true);
@@ -188,8 +190,8 @@ export default function GamePage() {
       setCloseEnabled(false);
       setTimeout(()=>setCloseEnabled(true), 1000);
     } else {
-      // animate the returned solution steps
-      await animateSolution(resp.solution);
+      // run the step‐by‐step animation
+      animateSolution(resp.solution);
     }
   };
 
@@ -307,7 +309,6 @@ export default function GamePage() {
       {showModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
           <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
-            {/* only show close on fail */}
             {modalType === "fail" && (
               <button
                 onClick={closeModal}
@@ -317,8 +318,6 @@ export default function GamePage() {
                 }`}
               >×</button>
             )}
-
-            {/* 🤖 emoji in both cases */}
             <div className="text-4xl">🤖</div>
             <h3 className="text-lg font-bold">{modalMsg}</h3>
 
