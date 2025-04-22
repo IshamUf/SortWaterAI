@@ -49,7 +49,7 @@ const Tube = ({ tube, index, onClick, selected }) => (
   <div
     onClick={()=>onClick(index)}
     className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch cursor-pointer ${
-      selected?"border-blue-400":"border-[#3B3F45]"
+      selected ? "border-blue-400" : "border-[#3B3F45]"
     } bg-transparent overflow-hidden`}
   >
     <div className="flex flex-col justify-end pt-2 h-full">
@@ -57,7 +57,7 @@ const Tube = ({ tube, index, onClick, selected }) => (
         <div
           key={i}
           className={`flex-1 mx-[2px] ${
-            cell===-1? "opacity-0": getColorBlock(cell,i,tube)
+            cell===-1 ? "opacity-0" : getColorBlock(cell,i,tube)
           }`}
         />
       ))}
@@ -67,19 +67,19 @@ const Tube = ({ tube, index, onClick, selected }) => (
 
 export default function GamePage() {
   const navigate = useNavigate();
-  const [levelId,     setLevelId]      = useState(null);
-  const [state,       setState]        = useState(null);
-  const [moves,       setMoves]        = useState(0);
-  const [coins,       setCoins]        = useState(0);
-  const [selected,    setSelected]     = useState(null);
+  const [levelId,     setLevelId]     = useState(null);
+  const [state,       setState]       = useState(null);
+  const [moves,       setMoves]       = useState(0);
+  const [coins,       setCoins]       = useState(0);
+  const [selected,    setSelected]    = useState(null);
 
-  const [showModal,   setShowModal]    = useState(false);
-  const [modalType,   setModalType]    = useState("success");    // "success" or "fail"
-  const [modalMsg,    setModalMsg]     = useState("");
-  const [modalReward, setModalReward]  = useState(0);
-  const [closeEnabled,setCloseEnabled] = useState(false);
-  const [isSolving,   setIsSolving]    = useState(false);
-  const [isAiModal,   setIsAiModal]    = useState(false);      // флаг для AI‑модалки
+  const [showModal,   setShowModal]   = useState(false);
+  const [modalType,   setModalType]   = useState("success"); // "success" or "fail"
+  const [modalMsg,    setModalMsg]    = useState("");
+  const [modalReward, setModalReward] = useState(0);
+  const [closeEnabled,setCloseEnabled]= useState(false);
+  const [isSolving,   setIsSolving]   = useState(false);
+  const [isAiModal,   setIsAiModal]   = useState(false);
 
   // initialization
   useEffect(()=>{
@@ -93,12 +93,12 @@ export default function GamePage() {
     })();
   },[]);
 
-  // confetti on success
+  // confetti on user success or AI success
   useEffect(()=>{
-    if(showModal && modalType==="success" && !isAiModal){
+    if(showModal && modalType==="success"){
       confetti({ particleCount:100, spread:60, origin:{x:0.5,y:0.7} });
     }
-  },[showModal, modalType, isAiModal]);
+  },[showModal, modalType]);
 
   if(!state) return (
     <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
@@ -111,7 +111,7 @@ export default function GamePage() {
   const bottomRow = state.slice(4);
 
   // user move
-  const clickTube = async(idx) => {
+  const clickTube = async (idx) => {
     if(solved) return;
     if(selected===null){
       if(state[idx][state[idx].length-1]!==-1) setSelected(idx);
@@ -132,18 +132,20 @@ export default function GamePage() {
     const resp = await wsMove({ levelId, from, to });
     if(resp.error){
       console.error(resp.error);
-      return setState(state);
+      setState(state);
+      return;
     }
     setState(resp.state);
     setMoves(resp.moves);
     if(resp.status==="completed"){
+      // user victory
       setModalType("success");
       setModalMsg(resp.message);
       setModalReward(resp.reward);
       setCoins(resp.coins);
-      setIsAiModal(false);
       setShowModal(true);
       setCloseEnabled(true);
+      setIsAiModal(false);
     }
   };
 
@@ -158,20 +160,23 @@ export default function GamePage() {
       return;
     }
     if(!resp.solvable){
+      // AI cannot solve
       setModalType("fail");
       setModalMsg("Sorry, I can’t solve this configuration.");
       setModalReward(0);
-      setIsAiModal(false);
       setShowModal(true);
       setCloseEnabled(false);
+      setIsAiModal(false);
       setTimeout(()=>setCloseEnabled(true), 1000);
     } else {
+      // AI solved: create next level progress immediately
+      await wsStart({ levelId: levelId + 1 });
       setModalType("success");
       setModalMsg(`I solved this in ${resp.ai_steps} steps`);
       setModalReward(0);
-      setIsAiModal(true);
       setShowModal(true);
       setCloseEnabled(true);
+      setIsAiModal(true);
     }
   };
 
@@ -184,7 +189,7 @@ export default function GamePage() {
     setShowModal(false);
   };
 
-  // close modal
+  // close modal (only for failure or after enable)
   const closeModal = () => {
     if(!closeEnabled) return;
     setShowModal(false);
@@ -193,21 +198,13 @@ export default function GamePage() {
   // continue after modal
   const continueGame = async () => {
     setShowModal(false);
-    if(isAiModal){
-      // перейти к следующему уровню после AI
-      const resp = await wsStart({ levelId: levelId + 1 });
-      setLevelId(resp.levelId);
-      setState(resp.state);
-      setMoves(resp.moves);
-      setIsAiModal(false);
-    } else {
-      // обычное продолжение после победы пользователя
-      const prog = await wsGetProgress();
-      if(prog.error) return navigate("/");
-      setLevelId(prog.levelId);
-      setState(prog.state);
-      setMoves(prog.moves);
-    }
+    // reload in-progress (user or AI) to get current level
+    const prog = await wsGetProgress();
+    if(prog.error) return navigate("/");
+    setLevelId(prog.levelId);
+    setState(prog.state);
+    setMoves(prog.moves);
+    setIsAiModal(false);
   };
 
   return (
@@ -235,11 +232,11 @@ export default function GamePage() {
                 onClick={handleSolve}
                 disabled={isSolving}
                 className={`w-14 h-14 rounded-full text-2xl flex items-center justify-center ${
-                  isSolving
-                    ? "bg-gray-600 opacity-60 cursor-not-allowed"
-                    : "bg-gray-700 hover:bg-gray-600"
+                  isSolving ? "bg-gray-600 opacity-60 cursor-not-allowed" : "bg-gray-700 hover:bg-gray-600"
                 }`}
-              >🤖</button>
+              >
+                🤖
+              </button>
               <span className="text-xs text-gray-400 mt-1">100</span>
             </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
@@ -255,25 +252,13 @@ export default function GamePage() {
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
               {topRow.map((tube,i)=>(
-                <Tube
-                  key={i}
-                  tube={tube}
-                  index={i}
-                  onClick={clickTube}
-                  selected={selected===i}
-                />
+                <Tube key={i} tube={tube} index={i} onClick={clickTube} selected={selected===i}/>
               ))}
             </div>
             {bottomRow.length>0 && (
               <div className="flex justify-center gap-4">
                 {bottomRow.map((tube,i)=>(
-                  <Tube
-                    key={i+4}
-                    tube={tube}
-                    index={i+4}
-                    onClick={clickTube}
-                    selected={selected===i+4}
-                  />
+                  <Tube key={i+4} tube={tube} index={i+4} onClick={clickTube} selected={selected===i+4}/>
                 ))}
               </div>
             )}
@@ -292,35 +277,30 @@ export default function GamePage() {
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
             <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
-              {/* close */}
-              <button
-                onClick={closeModal}
-                disabled={!closeEnabled}
-                className={`absolute top-2 left-2 text-white text-xl ${
-                  !closeEnabled ? "opacity-40 cursor-not-allowed" : ""
-                }`}
-              >×</button>
-
-              {/* emoji for failure */}
-              {modalType === "fail" && <div className="text-4xl">🤖</div>}
-
-              {/* emoji for AI success */}
-              {modalType === "success" && isAiModal && <div className="text-4xl">🤖</div>}
+              {/* close for failure only */}
+              {modalType === "fail" && (
+                <button
+                  onClick={closeModal}
+                  disabled={!closeEnabled}
+                  className={`absolute top-2 left-2 text-white text-xl ${
+                    !closeEnabled ? "opacity-40 cursor-not-allowed" : ""
+                  }`}
+                >
+                  ×
+                </button>
+              )}
 
               <h3 className="text-lg font-bold">{modalMsg}</h3>
 
               {modalType === "success" && (
                 <>
-                  {/* only user-victory shows reward badge */}
-                  {!isAiModal && (
-                    <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
-                      +{modalReward} 🪙
-                    </div>
-                  )}
+                  <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
+                    +{modalReward} 🪙
+                  </div>
                   <div className="flex space-x-4">
                     <button
                       className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
-                      onClick={()=>navigate("/")}
+                      onClick={() => navigate("/")}
                     >
                       Main
                     </button>
@@ -337,7 +317,7 @@ export default function GamePage() {
               {modalType === "fail" && (
                 <button
                   onClick={resetLevel}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl	font-bold shadow-md hover:scale-95 transition"
                 >
                   Reset Level
                 </button>
