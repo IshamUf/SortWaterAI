@@ -1,5 +1,4 @@
 // src/pages/GamePage.jsx
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
@@ -161,7 +160,7 @@ export default function GamePage() {
       setModalReward(0);
       setShowModal(true);
       setCloseEnabled(false);
-      setTimeout(()=>setCloseEnabled(true), 3000);
+      setTimeout(()=>setCloseEnabled(true), 1000);
     } else {
       setModalType("success");
       setModalMsg(`AI solved in ${resp.ai_steps} steps`);
@@ -268,10 +267,8 @@ export default function GamePage() {
           {/* RESET BUTTON */}
           <button
             onClick={resetLevel}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
-          >
-            Reset Level
-          </button>
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl	font-bold shadow-md hover:scale-95 transition"
+          >Reset Level</button>
         </div>
 
         {/* MODAL */}
@@ -286,6 +283,8 @@ export default function GamePage() {
                   !closeEnabled ? "opacity-40 cursor-not-allowed" : ""
                 }`}
               >×</button>
+              {/* emoji for fail */}
+              {modalType==="fail" && <div className="text-4xl">🤖</div>}
               <h3 className="text-lg font-bold">{modalMsg}</h3>
 
               {modalType === "success" && (
@@ -297,15 +296,11 @@ export default function GamePage() {
                     <button
                       className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
                       onClick={()=>navigate("/")}
-                    >
-                      Main
-                    </button>
+                    >Main</button>
                     <button
                       className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
                       onClick={continueGame}
-                    >
-                      Continue
-                    </button>
+                    >Continue</button>
                   </div>
                 </>
               )}
@@ -313,10 +308,8 @@ export default function GamePage() {
               {modalType === "fail" && (
                 <button
                   onClick={resetLevel}
-                  className="w-full bg-red-600 hover:bg-red-500 py-2 rounded-full font-semibold"
-                >
-                  Reset Level
-                </button>
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
+                >Reset Level</button>
               )}
             </div>
           </div>
