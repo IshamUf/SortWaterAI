@@ -1,4 +1,5 @@
 // src/pages/GamePage.jsx
+// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -102,6 +103,8 @@ export default function GamePage() {
     );
 
   const solved = isSolved(state);
+  const topRow = state.slice(0, 4);
+  const bottomRow = state.slice(4);
 
   const clickTube = async (idx) => {
     if (solved) return;
@@ -147,9 +150,6 @@ export default function GamePage() {
     setMoves(prog.moves);
   };
 
-  const topRow = state.slice(0, 4);
-  const bottomRow = state.slice(4);
-
   return (
     <div className="h-[100dvh] w-full flex flex-col justify-start bg-animated-photo px-4 py-6 overflow-hidden">
       <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
@@ -173,14 +173,14 @@ export default function GamePage() {
 
           {/* Moves + side buttons */}
           <div className="relative w-full mb-4 h-14">
-            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center flex-shrink-0">
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center">
               <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl">
                 🤖
               </button>
               <span className="text-xs mt-1 text-white">100</span>
             </div>
             <h2 className="text-xl font-bold text-center">Moves: {moves}</h2>
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center flex-shrink-0">
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex flex-col items-center">
               <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl">
                 ❓
               </button>
