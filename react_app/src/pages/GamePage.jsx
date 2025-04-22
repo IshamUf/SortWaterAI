@@ -161,10 +161,8 @@ export default function GamePage() {
       current = next;
       await new Promise(r => setTimeout(r, 1000));
     }
-    // create next level in backend
     await wsStart({ levelId: levelId + 1 });
     setIsAnimating(false);
-    // show AI‐success modal
     setModalType("success");
     setModalMsg(`I solved this level in ${steps} steps`);
     setModalReward(0);
@@ -190,7 +188,6 @@ export default function GamePage() {
       setCloseEnabled(false);
       setTimeout(()=>setCloseEnabled(true), 1000);
     } else {
-      // run the step‐by‐step animation
       animateSolution(resp.solution, resp.ai_steps);
     }
   };
@@ -309,7 +306,7 @@ export default function GamePage() {
       {showModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
           <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 text-white">
-            {/* only show close × on fail */}
+            {/* Close × only on fail */}
             {modalType === "fail" && (
               <button
                 onClick={closeModal}
@@ -320,21 +317,29 @@ export default function GamePage() {
               >×</button>
             )}
 
-            {/* always show top AI icon */}
+            {/* always show AI icon */}
             <div className="text-4xl">🤖</div>
             <h3 className="text-lg font-bold">{modalMsg}</h3>
 
             {modalType === "success" && (
-              <div className="flex space-x-4">
-                <button
-                  className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold text-white"
-                  onClick={()=>navigate("/")}
-                >Main</button>
-                <button
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold text-white shadow-md hover:scale-95 transition"
-                  onClick={continueGame}
-                >Continue</button>
-              </div>
+              <>
+                {/* user‑victory reward pill */}
+                {modalReward > 0 && (
+                  <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
+                    +{modalReward} 🪙
+                  </div>
+                )}
+                <div className="flex space-x-4">
+                  <button
+                    className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold text-white"
+                    onClick={()=>navigate("/")}
+                  >Main</button>
+                  <button
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold text-white shadow-md hover:scale-95 transition"
+                    onClick={continueGame}
+                  >Continue</button>
+                </div>
+              </>
             )}
 
             {modalType === "fail" && (
