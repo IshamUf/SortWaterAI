@@ -1,17 +1,7 @@
 #!/usr/bin/env python3
 """
 AI‑INGEST — сервис добавления сгенерированных уровней (v3).
-
-При старте проверяем, сколько уровней уже есть в БД:
-  - если их меньше WINDOW_LEVELS, работаем в «простом» режиме:
-    просто вставляем случайные уникальные уровни без учёта распределения;
-  - иначе — используем алгоритм «минимального Δ» по L1‑дистанции
-    к целевому TARGET_DISTRIB.
-
-Повторяем запрос у модели (до MAX_GENERATE_ATTEMPTS), пока не вставим
-add_count уровней. Если не смогли — выходим с кодом 2.
 """
-
 import os
 import sys
 import json
@@ -27,7 +17,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if SCRIPT_DIR not in sys.path:
     sys.path.insert(0, SCRIPT_DIR)
 
-# теперь импортируем вашу реальную функцию
 from get_generated_levels import get_generated_levels
 
 # ------------------------- settings (.env) ---------------------------------
@@ -118,6 +107,7 @@ def run_ingest(model_name: str, add_count: int):
         if not pool:
             break
 
+        # выбираем лучший по Δ или просто первый уникальный
         best_idx = None
         best_delta = float("inf")
 
@@ -153,20 +143,18 @@ def run_ingest(model_name: str, add_count: int):
         state = lvl["state"]
         solution = lvl.get("solution")
         if solution is not None:
-            # List[numpy.int64] → List[int]
             solution = [[int(src), int(dst)] for src, dst in solution]
 
-        # INSERT теперь записывает solution в свой столбец
+        # Теперь INSERT с новым полем level_format
         cur.execute(
             """INSERT INTO "Levels"
-               (level_data, difficulty, ai_steps, solution, "createdAt", "updatedAt")
-               VALUES (%s, %s, %s, %s, %s, %s)""",
+               (level_data, level_format, difficulty, ai_steps, solution, "createdAt", "updatedAt")
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
             (
-                # level_data — только state
                 json.dumps({"state": state}),
+                model_name,                  # <-- сюда записываем формат
                 lvl["difficulty"],
                 lvl["ai_steps"],
-                # solution — JSONB
                 json.dumps(solution) if solution is not None else None,
                 datetime.utcnow(),
                 datetime.utcnow(),

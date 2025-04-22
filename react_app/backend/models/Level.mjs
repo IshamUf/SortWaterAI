@@ -9,12 +9,17 @@ const Level = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: false,
     },
-    // Сложность теперь ХРАНИМ СЛОВОМ (easy / medium / hard …)
+    // Формат уровня (имя модели без .pth)
+    level_format: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    // Сложность, хранимая словом (easy / medium / hard …)
     difficulty: {
       type: DataTypes.STRING,
       allowNull: true,
     },
-    // Для будущего: сколько ходов делает ИИ-solver
+    // Для будущего: сколько ходов сделал ИИ-solver
     ai_steps: {
       type: DataTypes.INTEGER,
       allowNull: true,
@@ -33,4 +38,3 @@ const Level = sequelize.define(
 );
 
 export default Level;
-

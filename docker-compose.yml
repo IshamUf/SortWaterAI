@@ -51,6 +51,8 @@ services:
     volumes:
       - ./sortwaterai-bot:/app
       - ./ai_functions:/ai_functions
+    ports:
+      - "127.0.0.1:8001:8001"
 
 volumes:
   postgres_data:
