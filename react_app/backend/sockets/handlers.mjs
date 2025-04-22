@@ -1,4 +1,3 @@
-// backend/sockets/handlers.mjs
 import Progress from "../models/Progress.mjs";
 import Level    from "../models/Level.mjs";
 import User     from "../models/User.mjs";
@@ -6,7 +5,7 @@ import { canPour, pour, isSolved } from "../utils/levelLogic.mjs";
 import { fn, col, literal } from "sequelize";
 
 /**
- * Помощник: из массива args вытащить последний аргумент–колбэк, если это функция
+ * Из args достаёт последний аргумент, если это функция (ack).
  */
 function extractAck(args) {
   if (!Array.isArray(args)) return null;
@@ -15,7 +14,7 @@ function extractAck(args) {
 }
 
 /**
- * Помощник: вытащить полезную нагрузку (первый аргумент), если он не функция
+ * Из args вытаскивает полезный payload (первый аргумент), если он не функция.
  */
 function extractPayload(args) {
   if (!Array.isArray(args) || args.length === 0) return undefined;
@@ -33,7 +32,7 @@ export default function registerHandlers(socket) {
       ack({ id, username, coins });
     } catch (err) {
       console.error("user:get error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -43,20 +42,23 @@ export default function registerHandlers(socket) {
     try {
       if (!ack) return;
       const cooldownMs = 5 * 60 * 1000;
-      const now = Date.now();
+      const now  = Date.now();
       const last = socket.user.last_daily_reward
         ? +socket.user.last_daily_reward
         : 0;
+
       if (now - last < cooldownMs) {
         return ack({ error: "cooldown", next: last + cooldownMs });
       }
+
       socket.user.coins += 50;
       socket.user.last_daily_reward = new Date(now);
       await socket.user.save();
+
       ack({ coins: socket.user.coins, next: now + cooldownMs });
     } catch (err) {
       console.error("user:daily error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -69,7 +71,7 @@ export default function registerHandlers(socket) {
       ack({ count });
     } catch (err) {
       console.error("levels:count error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -79,10 +81,9 @@ export default function registerHandlers(socket) {
     const payload = extractPayload(args);
     try {
       if (!ack) return;
-      // payload может быть числом, строкой или { levelId }
       let raw = typeof payload === "object" && payload !== null
-                  ? payload.levelId
-                  : payload;
+                ? payload.levelId
+                : payload;
       const id = parseInt(raw, 10);
       if (isNaN(id)) {
         return ack({ error: "invalid_id" });
@@ -91,7 +92,7 @@ export default function registerHandlers(socket) {
       if (!lvl) {
         return ack({ error: "not_found" });
       }
-      const data = JSON.parse(lvl.level_data); // { state: [...] }
+      const data = JSON.parse(lvl.level_data);
       ack({
         id:         lvl.id,
         state:      data.state,
@@ -101,7 +102,7 @@ export default function registerHandlers(socket) {
       });
     } catch (err) {
       console.error("levels:get error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -112,7 +113,7 @@ export default function registerHandlers(socket) {
       if (!ack) return;
       const rows = await Progress.findAll({
         where:      { status: "completed" },
-        attributes:[ "userId", [fn("COUNT", col("status")), "completedCount"] ],
+        attributes:[ "userId", [ fn("COUNT", col("status")), "completedCount" ] ],
         group:      ["userId","User.id"],
         order:      [[ literal('"completedCount"'), "DESC" ]],
         include:    [{ model: User, attributes: ["username"] }],
@@ -125,7 +126,7 @@ export default function registerHandlers(socket) {
       ack(board);
     } catch (err) {
       console.error("leaderboard:get error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -149,7 +150,7 @@ export default function registerHandlers(socket) {
       });
     } catch (err) {
       console.error("progress:get error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -173,7 +174,6 @@ export default function registerHandlers(socket) {
         where:    { userId: socket.user.id, levelId: id },
         defaults: { state: orig, status: "in_progress", moves: 0 },
       });
-      // принудительный сброс
       p.state  = orig;
       p.status = "in_progress";
       p.moves  = 0;
@@ -186,7 +186,7 @@ export default function registerHandlers(socket) {
       });
     } catch (err) {
       console.error("progress:start error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 
@@ -197,7 +197,6 @@ export default function registerHandlers(socket) {
     try {
       if (!ack) return;
       const { levelId, from, to } = payload ?? {};
-      // валидируем все три поля
       if (
         typeof levelId !== "number" ||
         typeof from    !== "number" ||
@@ -209,18 +208,14 @@ export default function registerHandlers(socket) {
       const p = await Progress.findOne({
         where: { userId: socket.user.id, levelId }
       });
-      if (!p) {
-        return ack({ error: "no_progress" });
-      }
-      if (p.status === "completed") {
-        return ack({ error: "completed" });
-      }
+      if (!p) return ack({ error: "no_progress" });
+      if (p.status === "completed") return ack({ error: "completed" });
 
       const cur = p.state;
       if (
         !Array.isArray(cur) ||
-        from < 0         || from >= cur.length ||
-        to   < 0         || to   >= cur.length ||
+        from < 0 || from >= cur.length ||
+        to   < 0 || to   >= cur.length ||
         !canPour(cur[from], cur[to])
       ) {
         return ack({ error: "illegal" });
@@ -236,26 +231,53 @@ export default function registerHandlers(socket) {
       p.status = isSolved(next) ? "completed" : "in_progress";
       await p.save();
 
-      // подготовка следующего уровня, если этот завершён
+      // подготовка следующего уровня
       if (p.status === "completed") {
         const nxt = await Level.findByPk(p.levelId + 1);
         if (nxt) {
           const { state: nxtState } = JSON.parse(nxt.level_data);
           await Progress.findOrCreate({
             where:    { userId: socket.user.id, levelId: nxt.id },
-            defaults: { state: nxtState, status: "in_progress", moves: 0 }
+            defaults: { state: nxtState, status: "in_progress", moves: 0 },
           });
         }
       }
 
-      ack({
+      // Собираем результат и награду
+      const result = {
         state:  p.state,
         status: p.status,
-        moves:  p.moves
-      });
+        moves:  p.moves,
+      };
+      if (p.status === "completed") {
+        const lvl = await Level.findByPk(levelId);
+        const aiSteps   = lvl.ai_steps ?? 0;
+        const userSteps = p.moves;
+        let reward, message;
+
+        if (userSteps < aiSteps) {
+          reward  = 3;
+          message = "Wow, you beat the AI!";
+        } else if (userSteps === aiSteps) {
+          reward  = 2;
+          message = "Level completed!";
+        } else {
+          reward  = 1;
+          message = "Level completed!";
+        }
+
+        socket.user.coins += reward;
+        await socket.user.save();
+
+        result.reward  = reward;
+        result.message = message;
+        result.coins   = socket.user.coins;
+      }
+
+      ack(result);
     } catch (err) {
       console.error("progress:move error", err);
-      ack?.({ error: "internal" });
+      ack({ error: "internal" });
     }
   });
 }

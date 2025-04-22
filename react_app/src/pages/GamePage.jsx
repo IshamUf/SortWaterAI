@@ -10,159 +10,147 @@ import {
 } from "../sockets/socket";
 
 /* ---------- утилиты ---------- */
-const findTop = (tube) => tube.findIndex((c) => c !== -1);
-const deepClone = (s) => s.map((t) => [...t]);
-
-const canPour = (src, dst) => {
-  const f = findTop(src);
-  if (f === -1) return false;
-  const t = findTop(dst);
-  if (t === 0) return false;
+const findTop   = (tube) => tube.findIndex((c) => c !== -1);
+const deepClone = (s)    => s.map((t) => [...t]);
+const canPour   = (src, dst) => {
+  const f = findTop(src); if (f === -1) return false;
+  const t = findTop(dst); if (t === 0)  return false;
   return t === -1 || src[f] === dst[t];
 };
-const pour = (src, dst) => {
-  const A = [...src],
-        B = [...dst];
+const pour      = (src, dst) => {
+  const A = [...src], B = [...dst];
   let f = findTop(A), color = A[f], cnt = 1;
-  for (let i = f + 1; i < A.length && A[i] === color; i++) cnt++;
-  let t = findTop(B);
-  t = t === -1 ? B.length - 1 : t - 1;
-  while (cnt && t >= 0 && B[t] === -1) {
-    B[t] = color;
-    A[f] = -1;
-    f++; t--; cnt--;
+  for (let i = f+1; i < A.length && A[i]===color; i++) cnt++;
+  let t = findTop(B); t = t===-1?B.length-1:t-1;
+  while(cnt>0 && t>=0 && B[t]===-1){
+    B[t]=color; A[f]=-1; f++; t--; cnt--;
   }
   return { newSource: A, newTarget: B };
 };
-const isSolved = (state) =>
-  state.every(
-    (tube) =>
-      tube.every((c) => c === -1) ||
-      tube.every((c) => c !== -1 && c === tube[0])
+const isSolved  = (state) =>
+  state.every(tube =>
+    tube.every(c => c===-1) ||
+    tube.every(c => c!==-1 && c===tube[0])
   );
-/* -------------------------------- */
 
 /* ---------- Tube UI ---------- */
 const colorMap = [
-  "bg-[#8CB4C9]",
-  "bg-[#C9ADA7]",
-  "bg-[#B5CDA3]",
-  "bg-[#E0C097]",
-  "bg-[#A9A9B3]",
-  "bg-[#DAB6C4]",
-  "bg-[#A1C6EA]",
-  "bg-[#BFCBA8]",
+  "bg-[#8CB4C9]", "bg-[#C9ADA7]", "bg-[#B5CDA3]", "bg-[#E0C097]",
+  "bg-[#A9A9B3]", "bg-[#DAB6C4]", "bg-[#A1C6EA]", "bg-[#BFCBA8]"
 ];
 const getColorBlock = (c, idx, tube) => {
-  const base = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
-  const rounded =
-    idx === tube.length - 1 || tube[idx + 1] === -1
-      ? "rounded-b-full"
-      : "";
-  return `${base} ${colorMap[c] || "bg-transparent"} ${rounded} opacity-90`;
+  const base    = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
+  const rounded = (idx===tube.length-1||tube[idx+1]===-1)? "rounded-b-full":"";
+  return `${base} ${colorMap[c]||"bg-transparent"} ${rounded} opacity-90`;
 };
 const Tube = ({ tube, index, onClick, selected }) => (
   <div
-    onClick={() => onClick(index)}
+    onClick={()=>onClick(index)}
     className={`w-16 h-[160px] border-[4px] rounded-b-full rounded-t-xl flex flex-col justify-start items-stretch cursor-pointer ${
-      selected ? "border-blue-400" : "border-[#3B3F45]"
+      selected?"border-blue-400":"border-[#3B3F45]"
     } bg-transparent overflow-hidden`}
   >
     <div className="flex flex-col justify-end pt-2 h-full">
-      {tube.map((cell, i) => (
+      {tube.map((cell,i)=>(
         <div
           key={i}
           className={`flex-1 mx-[2px] ${
-            cell === -1 ? "opacity-0" : getColorBlock(cell, i, tube)
+            cell===-1? "opacity-0": getColorBlock(cell,i,tube)
           }`}
         />
       ))}
     </div>
   </div>
 );
-/* -------------------------------- */
 
 export default function GamePage() {
   const navigate = useNavigate();
-  const [levelId, setLevelId] = useState(null);
-  const [state, setState] = useState(null);
-  const [moves, setMoves] = useState(0);
-  const [coins, setCoins] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+  const [levelId,      setLevelId]      = useState(null);
+  const [state,        setState]        = useState(null);
+  const [moves,        setMoves]        = useState(0);
+  const [coins,        setCoins]        = useState(0);
+  const [selected,     setSelected]     = useState(null);
+  const [showModal,    setShowModal]    = useState(false);
+  const [modalReward,  setModalReward]  = useState(0);
+  const [modalMessage, setModalMessage] = useState("Level completed!");
 
-  useEffect(() => {
-    (async () => {
-      const me = await wsGetSelf();
-      setCoins(me.coins);
-      let prog = await wsGetProgress();
+  // инициализация
+  useEffect(()=>{
+    (async()=>{
+      const me   = await wsGetSelf(); setCoins(me.coins);
+      let prog   = await wsGetProgress();
       if (prog.error) prog = await wsStart({ levelId: 1 });
       setLevelId(prog.levelId);
       setState(prog.state);
       setMoves(prog.moves);
     })();
-  }, []);
+  },[]);
 
-  useEffect(() => {
-    if (showModal) {
-      confetti({
-        particleCount: 100,
-        spread: 60,
-        origin: { x: 0.5, y: 0.7 },
-      });
+  // при открытии модалки запускаем фейерверк
+  useEffect(()=>{
+    if(showModal){
+      confetti({ particleCount:100, spread:60, origin:{x:0.5,y:0.7} });
     }
-  }, [showModal]);
+  },[showModal]);
 
-  if (!state)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
-        Loading…
-      </div>
-    );
+  if(!state) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
+      Loading…
+    </div>
+  );
 
-  const solved = isSolved(state);
-  const topRow = state.slice(0, 4);
-  const bottomRow = state.slice(4);
+  const solved   = isSolved(state);
+  const topRow   = state.slice(0,4);
+  const bottomRow= state.slice(4);
 
-  const clickTube = async (idx) => {
-    if (solved) return;
-    if (selected === null) {
-      if (state[idx][state[idx].length - 1] !== -1) setSelected(idx);
+  // ход
+  const clickTube = async(idx)=>{
+    if(solved) return;
+    if(selected===null){
+      if(state[idx][state[idx].length-1]!==-1) setSelected(idx);
       return;
     }
-    if (selected === idx) return setSelected(null);
-    if (!canPour(state[selected], state[idx])) return setSelected(null);
+    if(selected===idx){ setSelected(null); return; }
+    if(!canPour(state[selected], state[idx])){ setSelected(null); return; }
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
-    optimistic[selected] = newSource;
-    optimistic[idx] = newTarget;
+    optimistic[selected]=newSource;
+    optimistic[idx]     =newTarget;
     setState(optimistic);
 
-    const from = selected, to = idx;
+    const from=selected, to=idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
-    if (resp.error) {
+    if(resp.error){
       console.error(resp.error);
       return setState(state);
     }
     setState(resp.state);
     setMoves(resp.moves);
-    if (resp.status === "completed") setShowModal(true);
+    if(resp.status==="completed"){
+      // назначаем награду и сообщение
+      setModalReward(resp.reward);
+      setModalMessage(resp.message);
+      setCoins(resp.coins);
+      setShowModal(true);
+    }
   };
 
-  const resetLevel = async () => {
+  // сброс
+  const resetLevel = async()=>{
     const resp = await wsStart({ levelId });
     setState(resp.state);
     setMoves(resp.moves);
     setSelected(null);
   };
 
-  const continueGame = async () => {
+  // продолжить
+  const continueGame = async()=>{
     setShowModal(false);
     const prog = await wsGetProgress();
-    if (prog.error) return navigate("/");
+    if(prog.error) return navigate("/");
     setLevelId(prog.levelId);
     setState(prog.state);
     setMoves(prog.moves);
@@ -174,7 +162,7 @@ export default function GamePage() {
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
           <button
-            onClick={() => navigate("/")}
+            onClick={()=>navigate("/")}
             className="bg-gray-700 px-3 py-1.5 rounded-full text-sm"
           >
             &larr; Main
@@ -189,9 +177,8 @@ export default function GamePage() {
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
 
-          {/* кнопки и Moves */}
+          {/* показываем Moves и две кнопки */}
           <div className="relative w-full mb-4 flex items-center justify-center">
-            {/* левая кнопка + подпись */}
             <div className="absolute left-0 flex flex-col items-center">
               <button
                 disabled
@@ -202,7 +189,6 @@ export default function GamePage() {
               <span className="text-xs text-gray-400 mt-1">100</span>
             </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
-            {/* правая кнопка + подпись */}
             <div className="absolute right-0 flex flex-col items-center">
               <button
                 disabled
@@ -214,33 +200,25 @@ export default function GamePage() {
             </div>
           </div>
 
+          {/* TUBES */}
           <div className="flex-1 flex flex-col justify-center space-y-4">
             <div className="flex justify-center gap-4">
-              {topRow.map((tube, i) => (
-                <Tube
-                  key={i}
-                  tube={tube}
-                  index={i}
-                  onClick={clickTube}
-                  selected={selected === i}
-                />
+              {topRow.map((tube,i)=>(
+                <Tube key={i} tube={tube} index={i}
+                      onClick={clickTube} selected={selected===i}/>
               ))}
             </div>
-            {bottomRow.length > 0 && (
+            {bottomRow.length>0 && (
               <div className="flex justify-center gap-4">
-                {bottomRow.map((tube, i) => (
-                  <Tube
-                    key={i + 4}
-                    tube={tube}
-                    index={i + 4}
-                    onClick={clickTube}
-                    selected={selected === i + 4}
-                  />
+                {bottomRow.map((tube,i)=>(
+                  <Tube key={i+4} tube={tube} index={i+4}
+                        onClick={clickTube} selected={selected===i+4}/>
                 ))}
               </div>
             )}
           </div>
 
+          {/* RESET BUTTON */}
           <button
             onClick={resetLevel}
             className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
@@ -252,17 +230,15 @@ export default function GamePage() {
         {/* MODAL */}
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-            <div
-              className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 animate-modal-celebrate"
-            >
-              <h3 className="text-lg font-bold">Level completed!</h3>
+            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 animate-modal-celebrate">
+              <h3 className="text-lg font-bold">{modalMessage}</h3>
               <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
-                +10 🪙
+                +{modalReward} 🪙
               </div>
               <div className="flex space-x-4">
                 <button
                   className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
-                  onClick={() => navigate("/")}
+                  onClick={()=>navigate("/")}
                 >
                   Main
                 </button>
