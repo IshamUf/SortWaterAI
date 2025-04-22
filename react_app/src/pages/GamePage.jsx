@@ -149,7 +149,7 @@ export default function GamePage() {
   };
 
   // animate AI solution
-  const animateSolution = async (solution) => {
+  const animateSolution = async (solution, steps) => {
     setIsAnimating(true);
     let current = [...state];
     for (let [from, to] of solution) {
@@ -166,7 +166,7 @@ export default function GamePage() {
     setIsAnimating(false);
     // show AI‐success modal
     setModalType("success");
-    setModalMsg("🤖 Solved by AI");
+    setModalMsg(`I solved this level in ${steps} steps`);
     setModalReward(0);
     setShowModal(true);
     setCloseEnabled(true);
@@ -184,14 +184,14 @@ export default function GamePage() {
     }
     if(!resp.solvable){
       setModalType("fail");
-      setModalMsg("🤖 Sorry, can’t solve this configuration.");
+      setModalMsg("Sorry, can’t solve this configuration.");
       setModalReward(0);
       setShowModal(true);
       setCloseEnabled(false);
       setTimeout(()=>setCloseEnabled(true), 1000);
     } else {
       // run the step‐by‐step animation
-      animateSolution(resp.solution);
+      animateSolution(resp.solution, resp.ai_steps);
     }
   };
 
@@ -205,13 +205,13 @@ export default function GamePage() {
     setShowModal(false);
   };
 
-  // close modal (only on fail)
+  // close modal (fail only)
   const closeModal = () => {
     if(!closeEnabled) return;
     setShowModal(false);
   };
 
-  // continue to next level
+  // continue to next level after success
   const continueGame = async () => {
     setShowModal(false);
     const prog = await wsGetProgress();
@@ -226,10 +226,10 @@ export default function GamePage() {
       <div className="w-full max-w-lg mx-auto text-white flex flex-col h-full">
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
-          <button onClick={()=>navigate("/")} className="bg-gray-700 px-3 py-1.5 rounded-full text-sm">
+          <button onClick={()=>navigate("/")} className="bg-gray-700 px-3 py-1.5 rounded-full text-sm text-white">
             &larr; Main
           </button>
-          <div className="bg-gray-700 px-3 py-1.5 rounded-full text-sm flex items-center space-x-1">
+          <div className="bg-gray-700 px-3 py-1.5 rounded-full text-sm flex items-center space-x-1 text-white">
             <span className="font-semibold">{coins}</span>
             <span className="text-yellow-400">🪙</span>
           </div>
@@ -246,7 +246,7 @@ export default function GamePage() {
                 onClick={handleSolve}
                 disabled={isSolving || isAnimating}
                 className={`w-14 h-14 rounded-full text-2xl flex items-center justify-center ${
-                  isSolving || isAnimating
+                  isSolving||isAnimating
                     ? "bg-gray-600 opacity-60 cursor-not-allowed"
                     : "bg-gray-700 hover:bg-gray-600"
                 }`}
@@ -298,7 +298,7 @@ export default function GamePage() {
           onClick={resetLevel}
           disabled={isAnimating}
           className={`w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md transition ${
-            isAnimating ? "opacity-60 cursor-not-allowed" : "hover:scale-95"
+            isAnimating ? "opacity-60 cursor-not-allowed text-white" : "hover:scale-95 text-white"
           }`}
         >
           Reset Level
@@ -308,7 +308,8 @@ export default function GamePage() {
       {/* MODAL */}
       {showModal && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-          <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
+          <div className="relative bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 text-white">
+            {/* only show close × on fail */}
             {modalType === "fail" && (
               <button
                 onClick={closeModal}
@@ -318,17 +319,19 @@ export default function GamePage() {
                 }`}
               >×</button>
             )}
+
+            {/* always show top AI icon */}
             <div className="text-4xl">🤖</div>
             <h3 className="text-lg font-bold">{modalMsg}</h3>
 
             {modalType === "success" && (
               <div className="flex space-x-4">
                 <button
-                  className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold"
+                  className="flex-1 bg-gray-700 py-3 rounded-xl text-xl font-bold text-white"
                   onClick={()=>navigate("/")}
                 >Main</button>
                 <button
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold text-white shadow-md hover:scale-95 transition"
                   onClick={continueGame}
                 >Continue</button>
               </div>
@@ -337,7 +340,7 @@ export default function GamePage() {
             {modalType === "fail" && (
               <button
                 onClick={resetLevel}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold text-white shadow-md hover:scale-95 transition"
               >Reset Level</button>
             )}
           </div>
