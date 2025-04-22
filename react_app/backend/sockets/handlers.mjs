@@ -1,3 +1,6 @@
+// backend/sockets/handlers.mjs
+
+import axios from "axios";
 import Progress from "../models/Progress.mjs";
 import Level    from "../models/Level.mjs";
 import User     from "../models/User.mjs";
@@ -280,4 +283,25 @@ export default function registerHandlers(socket) {
       ack({ error: "internal" });
     }
   });
+
+  // ——— Progress:solve ——————————————————————————
+  socket.on("progress:solve", async (...args) => {
+    const ack     = extractAck(args);
+    const payload = extractPayload(args);
+    if (!ack || !payload) return;
+
+    try {
+      const { levelId, state, user_moves } = payload;
+      // вызываем AI‑микросервис по Docker DNS
+      const { data } = await axios.post(
+        "http://ai_func:8001/solve_level",
+        { level_id: levelId, state, user_moves }
+      );
+      ack(data);
+    } catch (err) {
+      console.error("progress:solve error", err);
+      ack({ error: "internal" });
+    }
+  });
+
 }
