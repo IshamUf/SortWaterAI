@@ -22,19 +22,15 @@ const canPour = (src, dst) => {
 };
 const pour = (src, dst) => {
   const A = [...src],
-    B = [...dst];
-  let f = findTop(A),
-    color = A[f],
-    cnt = 1;
+        B = [...dst];
+  let f = findTop(A), color = A[f], cnt = 1;
   for (let i = f + 1; i < A.length && A[i] === color; i++) cnt++;
   let t = findTop(B);
   t = t === -1 ? B.length - 1 : t - 1;
   while (cnt && t >= 0 && B[t] === -1) {
     B[t] = color;
     A[f] = -1;
-    f++;
-    t--;
-    cnt--;
+    f++; t--; cnt--;
   }
   return { newSource: A, newTarget: B };
 };
@@ -58,8 +54,7 @@ const colorMap = [
   "bg-[#BFCBA8]",
 ];
 const getColorBlock = (c, idx, tube) => {
-  const base =
-    "w-full h-full mx-auto transition-all duration-500 ease-in-out";
+  const base = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
   const rounded =
     idx === tube.length - 1 || tube[idx + 1] === -1
       ? "rounded-b-full"
@@ -96,7 +91,6 @@ export default function GamePage() {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  // загрузка состояния
   useEffect(() => {
     (async () => {
       const me = await wsGetSelf();
@@ -109,7 +103,6 @@ export default function GamePage() {
     })();
   }, []);
 
-  // при появлении модалки — запуск конфетти под ней
   useEffect(() => {
     if (showModal) {
       confetti({
@@ -146,8 +139,7 @@ export default function GamePage() {
     optimistic[idx] = newTarget;
     setState(optimistic);
 
-    const from = selected,
-      to = idx;
+    const from = selected, to = idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
@@ -197,21 +189,29 @@ export default function GamePage() {
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
 
-          {/* кнопки и счетчик Moves */}
+          {/* кнопки и Moves */}
           <div className="relative w-full mb-4 flex items-center justify-center">
-            <button
-              className="absolute left-0 w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
-              disabled
-            >
-              🤖
-            </button>
+            {/* левая кнопка + подпись */}
+            <div className="absolute left-0 flex flex-col items-center">
+              <button
+                disabled
+                className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
+              >
+                🤖
+              </button>
+              <span className="text-xs text-gray-400 mt-1">100</span>
+            </div>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
-            <button
-              className="absolute right-0 w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
-              disabled
-            >
-              ❓
-            </button>
+            {/* правая кнопка + подпись */}
+            <div className="absolute right-0 flex flex-col items-center">
+              <button
+                disabled
+                className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
+              >
+                ❓
+              </button>
+              <span className="text-xs text-gray-400 mt-1">10</span>
+            </div>
           </div>
 
           <div className="flex-1 flex flex-col justify-center space-y-4">
