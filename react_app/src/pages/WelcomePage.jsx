@@ -1,3 +1,4 @@
+// src/pages/WelcomePage.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -22,12 +23,16 @@ export default function WelcomePage() {
   const [leaders, setLeaders] = useState([]);
   const [showLeadersModal, setShowLeadersModal] = useState(false);
 
+  // **Добавили state для score**
+  const [score, setScore] = useState({ "🏆": 0, "🎖️": 0, "🥉": 0 });
+
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
   const TIMEOUT_MS = 30 * 60 * 1000;
 
   useEffect(() => {
     (async () => {
+      // Получаем пользователя, включая новый score
       const me   = await wsGetSelf();
       const cnt  = await wsLevelsCount();
       let prog   = await wsGetProgress();
@@ -37,6 +42,12 @@ export default function WelcomePage() {
       setCoins(me.coins);
       setTotalLevels(cnt.count);
       setCurrentLevel(prog.levelId);
+
+      // **Сохраняем score из ответа**
+      if (me.score) {
+        setScore(me.score);
+      }
+
       checkCooldown();
     })();
   }, []);
@@ -117,7 +128,10 @@ export default function WelcomePage() {
                 <div className="font-semibold text-sm break-words w-32">
                   {username || "Loading..."}
                 </div>
-                <div className="text-yellow-300 text-xs">🏆 {currentLevel}</div>
+                {/* Вместо текущего уровня выводим score */}
+                <div className="text-yellow-300 text-xs">
+                  🏆: {score["🏆"]}  🎖️: {score["🎖️"]}  🥉: {score["🥉"]}
+                </div>
               </div>
             </div>
             <div className="bg-gray-700 px-3 py-1.5 rounded-full flex items-center space-x-1 text-sm">
