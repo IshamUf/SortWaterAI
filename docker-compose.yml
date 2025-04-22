@@ -39,7 +39,7 @@ services:
 
   bot:
     build:
-      context: .                       # корень SortWaterAI
+      context: .
       dockerfile: sortwaterai-bot/Dockerfile
     container_name: sortwater_bot
     env_file:
@@ -50,7 +50,18 @@ services:
       - postgres
     volumes:
       - ./sortwaterai-bot:/app
-      - ./ai_functions:/ai_functions
+
+  ai_func:
+    build:
+      context: .
+      dockerfile: sortwaterai-bot/Dockerfile.ai_func
+    container_name: sortwater_ai_func
+    env_file:
+      - ./sortwaterai-bot/.env
+    depends_on:
+      - postgres
+    volumes:
+      - ./sortwaterai-bot/ai_functions:/app/ai_functions:ro
     ports:
       - "127.0.0.1:8001:8001"
 

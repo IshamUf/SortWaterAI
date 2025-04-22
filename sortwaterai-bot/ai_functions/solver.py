@@ -151,15 +151,15 @@ def solve_level(
         print(f"[solver] Error solving level {level_id}: {e}")
         return {"solvable": False, "ai_steps": 0, "solution": []}
 
-# CLI для отладки
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("level_id",   type=int)
-    parser.add_argument("state",      type=str, help="JSON array of arrays")
-    parser.add_argument("user_moves", type=int)
-    args = parser.parse_args()
-
-    state = json.loads(args.state)
-    result = solve_level(args.level_id, state, args.user_moves)
-    print(json.dumps(result, ensure_ascii=False))
+# # CLI для отладки
+# if __name__ == "__main__":
+#     import argparse
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("level_id",   type=int)
+#     parser.add_argument("state",      type=str, help="JSON array of arrays")
+#     parser.add_argument("user_moves", type=int)
+#     args = parser.parse_args()
+#
+#     state = json.loads(args.state)
+#     result = solve_level(args.level_id, state, args.user_moves)
+#     print(json.dumps(result, ensure_ascii=False))

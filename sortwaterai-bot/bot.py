@@ -11,11 +11,13 @@ import json
 from pathlib import Path
 from aiogram import Bot, Dispatcher, executor, types
 from dotenv import load_dotenv
+import httpx
 
 # ─── Конфиг ────────────────────────────────────────────────────────────────
 load_dotenv()
 TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_ID  = int(os.getenv("ADMIN_ID", "0"))
+AI_FUNC_URL   = os.getenv("AI_FUNC_URL", "http://ai_func:8001")
 
 if not TOKEN:
     raise RuntimeError("TELEGRAM_BOT_TOKEN не задан в .env")
@@ -96,21 +98,29 @@ async def cmd_add_levels(msg: types.Message):
     count = int(count_str)
     await msg.reply(f"⏳ Генерирую {count} уровней моделью `{model_name}`…", parse_mode="Markdown")
 
-    # вызываем скрипт
-    script = AI_FUNC_DIR / "add_ai_level.py"
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable, str(script), model_name, str(count),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        cwd=str(AI_FUNC_DIR),
-    )
-    out, err = await proc.communicate()
+    # делаем POST к FastAPI
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                f"{AI_FUNC_URL}/add_levels",
+                json={"model_name": model_name, "count": count},
+                timeout=60.0
+            )
+        except httpx.RequestError as e:
+            return await msg.reply(f"🚫 Ошибка связи с AI‑сервисом: {e}")
 
-    if proc.returncode == 0:
-        text = out.decode().strip() or "OK"
-        await msg.reply(f"✅ Уровни добавлены:\n```\n{text}\n```", parse_mode="Markdown")
+    if resp.status_code == 200:
+        data = resp.json()
+        return await msg.reply(
+            f"✅ Уровни добавлены:\n"
+            f"- модель: `{data['model_name']}`\n"
+            f"- запрос на создание: {data['requested_count']}",
+            parse_mode="Markdown"
+        )
     else:
-        text = err.decode().strip() or out.decode().strip()
-        await msg.reply(f"🚫 Ошибка ({proc.returncode}):\n```\n{text}\n```", parse_mode="Markdown")
+        # если FastAPI вернул ошибку
+        detail = resp.json().get("detail", resp.text)
+        return await msg.reply(f"🚫 AI‑сервис ответил ошибкой {resp.status_code}:\n```\n{detail}\n```", parse_mode="Markdown")
 
 # ─── Старт ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

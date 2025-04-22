@@ -1,0 +1,18 @@
+# sortwaterai-bot/Dockerfile.ai_func
+
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# 1) Копируем только requirements для AI‑микросервиса
+COPY sortwaterai-bot/ai_functions/requirements.txt .
+
+RUN pip install --no-cache-dir \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      -r requirements.txt
+
+# 2) Копируем весь каталог ai_functions
+COPY sortwaterai-bot/ai_functions /app/ai_functions
+
+# Точка входа — запускаем uvicorn на ai_functions/api.py
+CMD ["uvicorn", "ai_functions.api:app", "--host", "0.0.0.0", "--port", "8001"]
