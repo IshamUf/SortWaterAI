@@ -21,13 +21,20 @@ const canPour = (src, dst) => {
   return t === -1 || src[f] === dst[t];
 };
 const pour = (src, dst) => {
-  const A = [...src], B = [...dst];
-  let f = findTop(A), color = A[f], cnt = 1;
+  const A = [...src],
+    B = [...dst];
+  let f = findTop(A),
+    color = A[f],
+    cnt = 1;
   for (let i = f + 1; i < A.length && A[i] === color; i++) cnt++;
   let t = findTop(B);
   t = t === -1 ? B.length - 1 : t - 1;
   while (cnt && t >= 0 && B[t] === -1) {
-    B[t] = color; A[f] = -1; f++; t--; cnt--;
+    B[t] = color;
+    A[f] = -1;
+    f++;
+    t--;
+    cnt--;
   }
   return { newSource: A, newTarget: B };
 };
@@ -37,18 +44,26 @@ const isSolved = (state) =>
       tube.every((c) => c === -1) ||
       tube.every((c) => c !== -1 && c === tube[0])
   );
-/* --------------------------- */
+/* -------------------------------- */
 
 /* ---------- Tube UI ---------- */
 const colorMap = [
-  "bg-[#8CB4C9]", "bg-[#C9ADA7]", "bg-[#B5CDA3]", "bg-[#E0C097]",
-  "bg-[#A9A9B3]", "bg-[#DAB6C4]", "bg-[#A1C6EA]", "bg-[#BFCBA8]"
+  "bg-[#8CB4C9]",
+  "bg-[#C9ADA7]",
+  "bg-[#B5CDA3]",
+  "bg-[#E0C097]",
+  "bg-[#A9A9B3]",
+  "bg-[#DAB6C4]",
+  "bg-[#A1C6EA]",
+  "bg-[#BFCBA8]",
 ];
 const getColorBlock = (c, idx, tube) => {
-  const base = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
-  const rounded = idx === tube.length - 1 || tube[idx + 1] === -1
-    ? "rounded-b-full"
-    : "";
+  const base =
+    "w-full h-full mx-auto transition-all duration-500 ease-in-out";
+  const rounded =
+    idx === tube.length - 1 || tube[idx + 1] === -1
+      ? "rounded-b-full"
+      : "";
   return `${base} ${colorMap[c] || "bg-transparent"} ${rounded} opacity-90`;
 };
 const Tube = ({ tube, index, onClick, selected }) => (
@@ -81,63 +96,49 @@ export default function GamePage() {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
-  /* Инициализация */
+  // загрузка состояния
   useEffect(() => {
     (async () => {
       const me = await wsGetSelf();
       setCoins(me.coins);
-
       let prog = await wsGetProgress();
-      if (prog.error) {
-        prog = await wsStart({ levelId: 1 });
-      }
-
+      if (prog.error) prog = await wsStart({ levelId: 1 });
       setLevelId(prog.levelId);
       setState(prog.state);
       setMoves(prog.moves);
     })();
   }, []);
 
-  /* Запуск конфетти при завершении уровня */
+  // при появлении модалки — запуск конфетти
   useEffect(() => {
     if (showModal) {
       confetti({
-        particleCount: 120,
-        spread: 70,
-        origin: { y: 0.4 }
+        particleCount: 100,
+        spread: 60,
+        origin: { x: 0.5, y: 0.6 },
       });
     }
   }, [showModal]);
 
-  if (!state) {
+  if (!state)
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
         Loading…
       </div>
     );
-  }
 
   const solved = isSolved(state);
   const topRow = state.slice(0, 4);
   const bottomRow = state.slice(4);
 
-  /* Обработка клика по колбе */
   const clickTube = async (idx) => {
     if (solved) return;
     if (selected === null) {
-      if (state[idx][state[idx].length - 1] !== -1) {
-        setSelected(idx);
-      }
+      if (state[idx][state[idx].length - 1] !== -1) setSelected(idx);
       return;
     }
-    if (selected === idx) {
-      setSelected(null);
-      return;
-    }
-    if (!canPour(state[selected], state[idx])) {
-      setSelected(null);
-      return;
-    }
+    if (selected === idx) return setSelected(null);
+    if (!canPour(state[selected], state[idx])) return setSelected(null);
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
@@ -145,23 +146,20 @@ export default function GamePage() {
     optimistic[idx] = newTarget;
     setState(optimistic);
 
-    const from = selected, to = idx;
+    const from = selected,
+      to = idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
     if (resp.error) {
       console.error(resp.error);
-      setState(state);
-      return;
+      return setState(state);
     }
     setState(resp.state);
     setMoves(resp.moves);
-    if (resp.status === "completed") {
-      setShowModal(true);
-    }
+    if (resp.status === "completed") setShowModal(true);
   };
 
-  /* Сброс уровня */
   const resetLevel = async () => {
     const resp = await wsStart({ levelId });
     setState(resp.state);
@@ -169,14 +167,10 @@ export default function GamePage() {
     setSelected(null);
   };
 
-  /* Продолжить игру */
   const continueGame = async () => {
     setShowModal(false);
     const prog = await wsGetProgress();
-    if (prog.error) {
-      navigate("/");
-      return;
-    }
+    if (prog.error) return navigate("/");
     setLevelId(prog.levelId);
     setState(prog.state);
     setMoves(prog.moves);
@@ -202,12 +196,18 @@ export default function GamePage() {
         {/* FIELD */}
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
-          <div className="flex items-center justify-between w-full px-4 mb-4">
-            <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed">
+          <div className="flex space-x-8 mb-4">
+            <button
+              className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
+              disabled
+            >
               🤖
             </button>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
-            <button className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed">
+            <button
+              className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
+              disabled
+            >
               ❓
             </button>
           </div>
@@ -250,7 +250,9 @@ export default function GamePage() {
         {/* MODAL */}
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
+            <div
+              className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 animate-modal-celebrate"
+            >
               <h3 className="text-lg font-bold">Level completed!</h3>
               <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
                 +10 🪙
