@@ -235,7 +235,7 @@ export default function GamePage() {
               </div>
               <div className="flex justify-between mt-4">
                 <button
-                  className="bg-gray-700 px-4 py-2 rounded"
+                  className="bg-gray-700 px-4 py-2 rounded-xl text-xl font-bold shadow-md"
                   onClick={() => navigate("/")}
                 >
                   Main
