@@ -79,31 +79,33 @@ export default function GamePage() {
   const [closeEnabled, setCloseEnabled] = useState(false);
 
   const [isSolving,    setIsSolving]    = useState(false);
+  const [isHinting,    setIsHinting]    = useState(false);
   const [isAnimating,  setIsAnimating]  = useState(false);
 
-  // для подсказки
-  const [hint,        setHint]        = useState(null);
+  // для отображения подсказки
+  const [hintStep,     setHintStep]     = useState(null);
 
-  // выбираем эмоджи медали по награде
+  // эмоджи медали
   const medalEmoji = modalReward === 3
     ? "🏆"
     : modalReward === 2
       ? "🎖️"
       : "🥉";
 
-  // initialization
-  useEffect(()=>{
-    (async()=>{
-      const me   = await wsGetSelf(); setCoins(me.coins);
+  // загрузка состояния
+  useEffect(() => {
+    (async () => {
+      const me   = await wsGetSelf();
+      setCoins(me.coins);
       let prog   = await wsGetProgress();
       if (prog.error) prog = await wsStart({ levelId: 1 });
       setLevelId(prog.levelId);
       setState(prog.state);
       setMoves(prog.moves);
     })();
-  },[]);
+  }, []);
 
-  // confetti on user win
+  // конфетти на победу
   useEffect(()=>{
     if(showModal && modalType==="success" && !isAnimating){
       confetti({ particleCount:100, spread:60, origin:{x:0.5,y:0.7} });
@@ -120,8 +122,8 @@ export default function GamePage() {
   const topRow    = state.slice(0,4);
   const bottomRow = state.slice(4);
 
-  // ход игрока
-  const clickTube = async(idx)=>{
+  // ход пользователя
+  const clickTube = async(idx) => {
     if(solved||isAnimating) return;
     if(selected===null){
       if(state[idx][state[idx].length-1]!==-1) setSelected(idx);
@@ -136,7 +138,7 @@ export default function GamePage() {
     optimistic[idx]     =newTarget;
     setState(optimistic);
 
-    const from=selected, to=idx;
+    const from = selected, to = idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
@@ -157,18 +159,19 @@ export default function GamePage() {
     }
   };
 
-  // анимация решения AI
-  const animateSolution = async(solution, steps)=>{
+  // анимация полного решения AI
+  const animateSolution = async(solution, steps) => {
     setIsAnimating(true);
     let current = [...state];
-    for(let [f,t] of solution){
-      const { newSource,newTarget } = pour(current[f],current[t]);
+    for(let [from,to] of solution){
+      const { newSource,newTarget } = pour(current[from],current[to]);
       const next = deepClone(current);
-      next[f]=newSource; next[t]=newTarget;
+      next[from]=newSource; next[to]=newTarget;
       setState(next);
       current=next;
       await new Promise(r=>setTimeout(r,1000));
     }
+    // после анимации старт нового уровня
     await wsStart({ levelId: levelId+1 });
     setIsAnimating(false);
     setModalType("success");
@@ -178,76 +181,73 @@ export default function GamePage() {
     setCloseEnabled(true);
   };
 
-  // кнопка 🤖 (полное решение)
-  const handleSolve = async()=>{
-    if(isSolving||isAnimating) return;
+  // Полное решение AI (кнопка 🤖)
+  const handleSolve = async() => {
+    if(isSolving||isAnimating||isHinting) return;
     setIsSolving(true);
     const resp = await wsSolveLevel({ levelId, state, user_moves: moves });
     setIsSolving(false);
-    if(resp.error){ console.error(resp.error); return; }
-    if(!resp.solvable){
+    if(resp.error || !resp.solvable){
       setModalType("fail");
-      setModalMsg("Sorry, can’t solve this configuration.");
+      setModalMsg("Sorry, I can’t solve this configuration.");
       setModalReward(0);
       setShowModal(true);
       setCloseEnabled(false);
       setTimeout(()=>setCloseEnabled(true),1000);
-    } else {
-      // списываем 100 монет сразу
-      setCoins(c => c - 100);
-      animateSolution(resp.solution, resp.ai_steps);
+      return;
     }
+    // списываем 100 монет сразу
+    setCoins(c => c - 100);
+    animateSolution(resp.solution, resp.ai_steps);
   };
 
-  // кнопка ❓ (подсказка первого хода)
-  const handleHint = async()=>{
-    if(isSolving||isAnimating) return;
-    setIsSolving(true);
-    const resp = await wsSolveLevel({ levelId, state, user_moves: moves });
-    setIsSolving(false);
-    if(resp.error){ console.error(resp.error); return; }
-    if(!resp.solvable){
+  // Подсказка AI (кнопка ❓)
+  const handleHint = async() => {
+    if(isHinting||isSolving||isAnimating) return;
+    setIsHinting(true);
+    const resp = await wsSolveLevel({ levelId, state, user_moves: moves, hint: true });
+    setIsHinting(false);
+    if(resp.error || !resp.solvable){
       setModalType("fail");
-      setModalMsg("Sorry, can’t solve this configuration.");
+      setModalMsg("Sorry, I can’t solve this configuration.");
       setModalReward(0);
       setShowModal(true);
       setCloseEnabled(false);
       setTimeout(()=>setCloseEnabled(true),1000);
-    } else {
-      // списываем 10 монет сразу
-      setCoins(c => c - 10);
-      // показываем первый шаг подсказки
-      const [from,to] = resp.solution[0] || [];
-      setHint({ from, to });
+      return;
     }
+    // списываем 10 монет
+    setCoins(c => c - 10);
+    // показываем первую рекомендацию
+    setHintStep(resp.hint || null);
   };
 
-  // сброс уровня
-  const resetLevel = async()=>{
+  // Сброс уровня
+  const resetLevel = async() => {
     if(isAnimating) return;
     const resp = await wsStart({ levelId });
     setState(resp.state);
     setMoves(resp.moves);
     setSelected(null);
     setShowModal(false);
-    setHint(null);
+    setHintStep(null);
   };
 
-  // закрыть модалку (только fail)
-  const closeModal = ()=>{
+  // Закрыть модалку fail
+  const closeModal = () => {
     if(!closeEnabled) return;
     setShowModal(false);
   };
 
-  // продолжить на следующий уровень
-  const continueGame = async()=>{
+  // Продолжить после user‑победы
+  const continueGame = async() => {
     setShowModal(false);
     const prog = await wsGetProgress();
     if(prog.error) return navigate("/");
     setLevelId(prog.levelId);
     setState(prog.state);
     setMoves(prog.moves);
-    setHint(null);
+    setHintStep(null);
   };
 
   return (
@@ -269,39 +269,37 @@ export default function GamePage() {
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
 
-          {/* bot + moves */}
+          {/* AI controls + Moves + Hint */}
           <div className="relative w-full mb-4 flex items-center justify-center">
-            {/* 🤖 */}
+            {/* 🤖 solve */}
             <div className="absolute left-0 flex flex-col items-center">
               <button
                 onClick={handleSolve}
-                disabled={isSolving||isAnimating}
+                disabled={isSolving||isAnimating||isHinting}
                 className={`w-14 h-14 rounded-full text-2xl flex items-center justify-center ${
-                  isSolving||isAnimating
+                  isSolving||isAnimating||isHinting
                     ? "bg-gray-600 opacity-60 cursor-not-allowed"
                     : "bg-gray-700 hover:bg-gray-600"
                 }`}
               >🤖</button>
               <span className="text-xl font-bold text-gray-400 mt-1">100</span>
             </div>
-
-            {/* Moves */}
-            <div>
+            {/* Moves and hint */}
+            <div className="flex flex-col items-center">
               <h2 className="text-xl font-bold">Moves: {moves}</h2>
-              {hint && (
-                <div className="mt-1 text-sm text-gray-200">
-                  🤖: I recommend pouring from {hint.from} to {hint.to}
+              {hintStep && (
+                <div className="text-sm text-gray-200 mt-1">
+                  🤖: I recommend pouring from {hintStep[0]} to {hintStep[1]}
                 </div>
               )}
             </div>
-
-            {/* ❓ */}
+            {/* ❓ hint */}
             <div className="absolute right-0 flex flex-col items-center">
               <button
                 onClick={handleHint}
-                disabled={isSolving||isAnimating}
+                disabled={isHinting||isSolving||isAnimating}
                 className={`w-14 h-14 rounded-full text-2xl flex items-center justify-center ${
-                  isSolving||isAnimating
+                  isHinting||isSolving||isAnimating
                     ? "bg-gray-600 opacity-60 cursor-not-allowed"
                     : "bg-gray-700 hover:bg-gray-600"
                 }`}
@@ -341,7 +339,7 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* RESET BUTTON */}
+        {/* RESET */}
         <button
           onClick={resetLevel}
           disabled={isAnimating}
@@ -365,6 +363,8 @@ export default function GamePage() {
                 }`}
               >×</button>
             )}
+
+            {/* always show AI icon */}
             <div className="text-4xl">🤖</div>
             <h3 className="text-lg font-bold">{modalMsg}</h3>
 
