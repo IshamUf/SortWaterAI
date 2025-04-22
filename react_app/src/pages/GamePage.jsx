@@ -1,7 +1,7 @@
 // src/pages/GamePage.jsx
-// src/pages/GamePage.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import confetti from "canvas-confetti";
 import {
   wsGetSelf,
   wsGetProgress,
@@ -46,7 +46,9 @@ const colorMap = [
 ];
 const getColorBlock = (c, idx, tube) => {
   const base = "w-full h-full mx-auto transition-all duration-500 ease-in-out";
-  const rounded = idx === tube.length - 1 || tube[idx + 1] === -1 ? "rounded-b-full" : "";
+  const rounded = idx === tube.length - 1 || tube[idx + 1] === -1
+    ? "rounded-b-full"
+    : "";
   return `${base} ${colorMap[c] || "bg-transparent"} ${rounded} opacity-90`;
 };
 const Tube = ({ tube, index, onClick, selected }) => (
@@ -79,56 +81,87 @@ export default function GamePage() {
   const [selected, setSelected] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
+  /* Инициализация */
   useEffect(() => {
     (async () => {
       const me = await wsGetSelf();
       setCoins(me.coins);
+
       let prog = await wsGetProgress();
-      if (prog.error) prog = await wsStart({ levelId: 1 });
+      if (prog.error) {
+        prog = await wsStart({ levelId: 1 });
+      }
+
       setLevelId(prog.levelId);
       setState(prog.state);
       setMoves(prog.moves);
     })();
   }, []);
 
-  if (!state)
+  /* Запуск конфетти при завершении уровня */
+  useEffect(() => {
+    if (showModal) {
+      confetti({
+        particleCount: 120,
+        spread: 70,
+        origin: { y: 0.4 }
+      });
+    }
+  }, [showModal]);
+
+  if (!state) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-800 text-white">
         Loading…
       </div>
     );
+  }
 
   const solved = isSolved(state);
   const topRow = state.slice(0, 4);
   const bottomRow = state.slice(4);
 
+  /* Обработка клика по колбе */
   const clickTube = async (idx) => {
     if (solved) return;
     if (selected === null) {
-      if (state[idx][state[idx].length - 1] !== -1) setSelected(idx);
+      if (state[idx][state[idx].length - 1] !== -1) {
+        setSelected(idx);
+      }
       return;
     }
-    if (selected === idx) return setSelected(null);
-    if (!canPour(state[selected], state[idx])) return setSelected(null);
+    if (selected === idx) {
+      setSelected(null);
+      return;
+    }
+    if (!canPour(state[selected], state[idx])) {
+      setSelected(null);
+      return;
+    }
 
     const { newSource, newTarget } = pour(state[selected], state[idx]);
     const optimistic = deepClone(state);
     optimistic[selected] = newSource;
     optimistic[idx] = newTarget;
     setState(optimistic);
+
     const from = selected, to = idx;
     setSelected(null);
 
     const resp = await wsMove({ levelId, from, to });
     if (resp.error) {
       console.error(resp.error);
-      return setState(state);
+      setState(state);
+      return;
     }
     setState(resp.state);
     setMoves(resp.moves);
-    if (resp.status === "completed") setShowModal(true);
+    if (resp.status === "completed") {
+      setShowModal(true);
+    }
   };
 
+  /* Сброс уровня */
   const resetLevel = async () => {
     const resp = await wsStart({ levelId });
     setState(resp.state);
@@ -136,10 +169,14 @@ export default function GamePage() {
     setSelected(null);
   };
 
+  /* Продолжить игру */
   const continueGame = async () => {
     setShowModal(false);
     const prog = await wsGetProgress();
-    if (prog.error) return navigate("/");
+    if (prog.error) {
+      navigate("/");
+      return;
+    }
     setLevelId(prog.levelId);
     setState(prog.state);
     setMoves(prog.moves);
@@ -204,7 +241,7 @@ export default function GamePage() {
 
           <button
             onClick={resetLevel}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
           >
             Reset Level
           </button>
@@ -213,7 +250,7 @@ export default function GamePage() {
         {/* MODAL */}
         {showModal && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60">
-            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4 animate-modal-celebrate">
+            <div className="bg-gray-800 p-6 rounded-xl w-3/4 max-w-sm text-center space-y-4">
               <h3 className="text-lg font-bold">Level completed!</h3>
               <div className="bg-gray-700 px-3 py-1.5 rounded-full inline-block text-white font-semibold">
                 +10 🪙
@@ -226,7 +263,7 @@ export default function GamePage() {
                   Main
                 </button>
                 <button
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-105 transition"
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-800 py-3 rounded-xl text-xl font-bold shadow-md hover:scale-95 transition"
                   onClick={continueGame}
                 >
                   Continue
