@@ -109,13 +109,13 @@ export default function GamePage() {
     })();
   }, []);
 
-  // при появлении модалки — запуск конфетти
+  // при появлении модалки — запуск конфетти под ней
   useEffect(() => {
     if (showModal) {
       confetti({
         particleCount: 100,
         spread: 60,
-        origin: { x: 0.5, y: 0.6 },
+        origin: { x: 0.5, y: 0.7 },
       });
     }
   }, [showModal]);
@@ -196,16 +196,18 @@ export default function GamePage() {
         {/* FIELD */}
         <div className="flex flex-col flex-grow items-center">
           <div className="text-sm text-gray-400 mb-1">Level {levelId}</div>
-          <div className="flex space-x-8 mb-4">
+
+          {/* кнопки и счетчик Moves */}
+          <div className="relative w-full mb-4 flex items-center justify-center">
             <button
-              className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
+              className="absolute left-0 w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
               disabled
             >
               🤖
             </button>
             <h2 className="text-xl font-bold">Moves: {moves}</h2>
             <button
-              className="w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
+              className="absolute right-0 w-14 h-14 rounded-full bg-gray-700 flex items-center justify-center text-2xl opacity-60 cursor-not-allowed"
               disabled
             >
               ❓
