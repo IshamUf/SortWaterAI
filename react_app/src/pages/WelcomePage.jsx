@@ -159,7 +159,7 @@ export default function WelcomePage() {
                 onClick={openLeaders}
                 className="w-14 h-14 bg-gray-700 rounded-full flex items-center justify-center text-2xl"
               >
-                📊
+                🏆
               </button>
             </div>
 

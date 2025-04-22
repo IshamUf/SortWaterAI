@@ -43,7 +43,7 @@ export default function registerHandlers(socket) {
     const ack = extractAck(args);
     try {
       if (!ack) return;
-      const cooldownMs = 5 * 60 * 1000;
+      const cooldownMs = 5 * 60 * 1000; // время между подарками
       const now  = Date.now();
       const last = socket.user.last_daily_reward
         ? +socket.user.last_daily_reward
@@ -53,7 +53,7 @@ export default function registerHandlers(socket) {
         return ack({ error: "cooldown", next: last + cooldownMs });
       }
 
-      socket.user.coins += 50;
+      socket.user.coins += 500; // дневной подарок
       socket.user.last_daily_reward = new Date(now);
       await socket.user.save();
 
