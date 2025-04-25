@@ -37,6 +37,7 @@ def get_generated_levels(model: str, count: int) -> List[Dict]:
     base_env = WaterSortEnvFixed(
         num_tubes = N,
         max_layers= L,
+        num_empty=K,
         num_colors= num_colors,
         max_steps = max_steps
     )

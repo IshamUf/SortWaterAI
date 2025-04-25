@@ -27,6 +27,7 @@ DB_CFG = {
 def create_env(
     num_tubes: int,
     max_layers: int,
+    num_empty: int,
     num_colors: int,
     max_steps: int = 100
 ) -> DiscreteActionWrapper:
@@ -36,6 +37,7 @@ def create_env(
     base_env = WaterSortEnvFixed(
         num_tubes  = num_tubes,
         max_layers = max_layers,
+        num_empty= num_empty,
         num_colors = num_colors,
         max_steps  = max_steps
     )
@@ -141,7 +143,7 @@ def solve_level(
         return {"solvable": False, "ai_steps": 0, "solution": []}
 
     # Создаём окружение и агента
-    env = create_env(num_tubes=N, num_colors=N-K, max_layers=L)
+    env = create_env(num_tubes=N, num_colors=N-K, max_layers=L, num_empty=K)
     try:
         agent = load_agent(model_name, env, N)
         sol = solve_with_agent(agent, env, state, N)
