@@ -29,7 +29,7 @@ export default function WelcomePage() {
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
   // const TIMEOUT_MS = 30 * 60 * 1000;
-  const TIMEOUT_MS = Infinity;
+  const DISABLE_EASTER_EGG = true;
 
   useEffect(() => {
     (async () => {
@@ -97,9 +97,16 @@ export default function WelcomePage() {
   }
   function resetIdle() {
     clearTimeout(idleTimer.current);
-    audioRef.current?.pause();
-    if (audioRef.current) audioRef.current.currentTime = 0;
-    idleTimer.current = setTimeout(triggerEgg, TIMEOUT_MS);
+    idleTimer.current = null;
+
+    if (audioRef.current) {
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    }
+
+    if (!DISABLE_EASTER_EGG) {
+      idleTimer.current = setTimeout(triggerEgg, 30 * 60 * 1000);
+    }
   }
   useEffect(() => {
     window.addEventListener("click", resetIdle);
