@@ -28,7 +28,8 @@ export default function WelcomePage() {
 
   const audioRef = useRef(null);
   const idleTimer = useRef(null);
-  const TIMEOUT_MS = 30 * 60 * 1000;
+  // const TIMEOUT_MS = 30 * 60 * 1000;
+  const TIMEOUT_MS = Infinity;
 
   useEffect(() => {
     (async () => {
