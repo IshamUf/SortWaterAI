@@ -2,7 +2,7 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 from collections import deque
-# from scipy.stats import entropy
+
 
 class WaterSortEnvFixed(gym.Env):
     """
@@ -36,7 +36,7 @@ class WaterSortEnvFixed(gym.Env):
     можно модифицировать под точные правила вашей версии Water Sort Puzzle.
     """
 
-    def __init__(self, num_tubes=4, max_layers=4, num_colors=3, max_steps=300):
+    def __init__(self, num_tubes=4, max_layers=4, num_empty=1, num_colors=3, max_steps=300):
         """
         Конструктор окружения WaterSortEnvFixed.
 
@@ -60,6 +60,7 @@ class WaterSortEnvFixed(gym.Env):
         self.max_layers = max_layers   # Число слоёв (K)
         self.num_colors = num_colors   # Кол-во цветов
         self.max_steps = max_steps     # Максимальное число шагов одной игры
+        self.num_empty = num_empty     # число пустых колб (L)
 
         # Пространство действий:
         # Каждое действие -- пара (from_tube, to_tube).
@@ -80,7 +81,7 @@ class WaterSortEnvFixed(gym.Env):
 
         self.steps = 0  # Счётчик шагов
 
-        self.prev_action = 0, 0
+        self.prev_action = None
 
         self.prev_state = None
 
@@ -107,14 +108,14 @@ class WaterSortEnvFixed(gym.Env):
         num_attempts = 0
 
         if previous and (self.prev_state is not None):
-          self.state = self.prev_state
+          self.state = self.prev_state.copy()
         else:
           while True:
             # Создаём пустую матрицу (N,K)
             self.state = np.full((self.num_tubes, self.max_layers), -1, dtype=int)
 
             # Заполняем только первые (num_tubes - 1) трубок.
-            total_filled_tubes = self.num_colors
+            total_filled_tubes = self.num_tubes - self.num_empty
             total_slots = total_filled_tubes * self.max_layers
 
 
@@ -234,10 +235,25 @@ class WaterSortEnvFixed(gym.Env):
 
         observation = self._get_obs()
         # Проверяем, достигнут ли лимит шагов или не осталось доступных действий
-        truncated = (self.steps >= self.max_steps) or (len(self.get_valid_actions(observation)) == 0)
+        # truncated = (self.steps >= self.max_steps) or (len(self.get_valid_actions(observation)) == 0)
+        # if not (self.fast_get_valid_actions(observation) == self.get_valid_actions(observation)):
+        #     print(observation)
+        #     print(f"not_fast {self.get_valid_actions(observation)}")
+        #     for move in self.get_valid_actions(observation):
+        #         print(f"from_tube: {move // self.num_tubes} to_tube: {move % self.num_tubes}")
+        #
+        #     print(f"fast {self.fast_get_valid_actions(observation)}")
+        #     for move2 in self.fast_get_valid_actions(observation):
+        #         print(f"from_tube: {move2 // self.num_tubes} to_tube: {move2 % self.num_tubes}")
 
+        # Проверяем, достигнут ли лимит шагов или не осталось доступных действий
+        limit_reached = self.steps >= self.max_steps
+        no_moves      = len(self.fast_get_valid_actions(observation.flatten())) == 0
 
+        truncated = limit_reached or no_moves
 
+        info["step_limit_reached"] = bool(limit_reached)
+        info["no_valid_moves"] = bool(no_moves)
 
 
         # штраф за повтор recent_states
@@ -414,16 +430,42 @@ class WaterSortEnvFixed(gym.Env):
         return -1
 
 
-    def get_valid_actions(self, flat_obs):
-        obs_2d = flat_obs.reshape(self.num_tubes, self.max_layers)
-        valid_acts = []
-        N = self.num_tubes
-        for a in range(N*N):
-            from_tube = a // N
-            to_tube   = a % N
-            if from_tube != to_tube and self._can_pour_obs(obs_2d, from_tube, to_tube) and (from_tube, to_tube) != self.prev_action:
-                valid_acts.append(a)
-        return valid_acts
+    # def get_valid_actions(self, flat_obs):
+    #     obs_2d = flat_obs.reshape(self.num_tubes, self.max_layers)
+    #     valid_acts = []
+    #     N = self.num_tubes
+    #     for a in range(N*N):
+    #         from_tube = a // N
+    #         to_tube   = a % N
+    #         if from_tube != to_tube and self._can_pour_obs(obs_2d, from_tube, to_tube) and (from_tube, to_tube) != self.prev_action:
+    #             valid_acts.append(a)
+    #     return valid_acts
+
+    def fast_get_valid_actions(self, flat_obs, *, ignore_prev=False):
+        N, K = self.num_tubes, self.max_layers
+        obs = flat_obs.reshape(N, K) if flat_obs.ndim == 1 else flat_obs
+
+        is_empty = (obs == -1).all(axis=1)
+        first_filled = np.where(is_empty, K, (obs != -1).argmax(axis=1))
+        free_space   = K - (K - first_filled)          # ≤ K, 0 == нет места
+
+        top_color = np.full(N, -2, dtype=int)
+        filled_mask = ~is_empty
+        top_color[filled_mask] = obs[filled_mask, first_filled[filled_mask]]
+
+        can_from = ~is_empty
+        can_to   = free_space > 0                      # исправили «top_idx>0»
+
+        same_or_empty = (top_color[:, None] == top_color[None, :]) | is_empty[None, :]
+
+        mask = can_from[:, None] & can_to[None, :] & same_or_empty
+        np.fill_diagonal(mask, False)
+
+        # убрать прошлое действие
+        if (not ignore_prev) and (self.prev_action is not None):
+            mask.flat[self.prev_action[0]*N + self.prev_action[1]] = False
+
+        return np.flatnonzero(mask.ravel()).tolist()
 
 
 class DiscreteActionWrapper(gym.Wrapper):
@@ -443,6 +485,10 @@ class DiscreteActionWrapper(gym.Wrapper):
             dtype=int
         )
 
+    @property
+    def max_steps(self):
+        return self.env.max_steps
+
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
         return obs.flatten(), info
@@ -454,8 +500,9 @@ class DiscreteActionWrapper(gym.Wrapper):
         obs, reward, done, truncated, info = self.env.step((from_tube, to_tube))
         return obs.flatten(), reward, done, truncated, info
 
-    def get_valid_actions(self, flat_obs):
+    def fast_get_valid_actions(self, flat_obs, *, ignore_prev=False):
         """
         Проброс к базовому окружению (необёрнутому).
         """
-        return self.env.get_valid_actions(flat_obs)
+        # return self.env.get_valid_actions(flat_obs)
+        return self.env.fast_get_valid_actions(flat_obs, ignore_prev=ignore_prev)

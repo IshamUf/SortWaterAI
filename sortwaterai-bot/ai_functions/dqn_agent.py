@@ -50,27 +50,26 @@ class MaskedDQNAgent(nn.Module):
             qvals = self.q_net_target(obs_t)
         return qvals
 
+
     def sample_actions_masked(self, obs: np.ndarray, env) -> np.ndarray:
-        """
-        Epsilon-greedy + маскируем недопустимые действия при выборе действия.
-        """
-        qvals = self.predict_qvalues(obs)  # (batch_size, action_dim)
-        batch_size, action_dim = qvals.shape
-        actions = []
-        for i in range(batch_size):
-            valid_acts = env.get_valid_actions(obs[i])  # список индексов
-            if len(valid_acts) == 0:
-                valid_acts = list(range(action_dim))  # fallback
-            masked_q = qvals[i].copy()
-            invalid_acts = set(range(action_dim)) - set(valid_acts)
-            for inv_a in invalid_acts:
-                masked_q[inv_a] = -1e9
+        qvals = self.predict_qvalues(obs)            # numpy (B, A)
+        B, A = qvals.shape
+        actions = np.empty(B, dtype=int)
+
+        for i in range(B):
+            valid = env.fast_get_valid_actions(obs[i])
+            if not valid:
+                valid = list(range(A))
             if random.random() < self.epsilon:
-                # случайный выбор среди valid_acts
-                actions.append(random.choice(valid_acts))
+                actions[i] = random.choice(valid)
             else:
-                actions.append(np.argmax(masked_q))
-        return np.array(actions)
+                # вместо цикла сделаем маску
+                mask = np.full(A, -1e9, dtype=np.float32)
+                mask[valid] = 0.0
+                q_masked = qvals[i] + mask           # invalid≤-1e9
+                actions[i] = q_masked.argmax()
+
+        return actions
 
     def update_target(self):
         self.q_net_target.load_state_dict(self.q_net.state_dict())
