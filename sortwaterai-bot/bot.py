@@ -96,7 +96,7 @@ async def cmd_add_levels(msg: types.Message):
         return await msg.reply("Вторым аргументом должно быть число уровней.")
 
     count = int(count_str)
-    await msg.reply(f"⏳ Генерирую {count} уровней`…", parse_mode="Markdown")
+    await msg.reply(f"⏳ Генерирую {count} уровней…", parse_mode="Markdown")
 
     # делаем POST к FastAPI
     async with httpx.AsyncClient() as client:
