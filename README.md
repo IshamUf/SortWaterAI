@@ -114,11 +114,3 @@ Progress(userId, levelId, state JSON, moves, status, solvedByAI BOOL)
 | `create_random_user.py` | seed demo users |
 | `bot.py` | Telegram bot wrapper (future work) |
 
----
-
-## 7  Road-map 2.0
-
-1. **Self-play training** – collect player trajectories, fine-tune DQN.  
-2. **PWA offline-mode** – play without network, sync later.  
-3. **PvP race** – two players solve one level, winner takes coin-pot.  
-4. **A/B pricing tests** – measure conversion for 10 vs 20 coin hints.
